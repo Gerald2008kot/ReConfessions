@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Re-Confessions</title>
+  <meta name="description" content="Tu espacio seguro y anónimo." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="css/app.css" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     VISTA: FEED
+════════════════════════════════════════════════════════════════ -->
+<div id="view-feed" class="view active">
+
+  <!-- Header fijo -->
+  <header class="app-header">
+    <h1 class="app-header__title">ReConfessions</h1>
+
+    <!-- Chip de sesión -->
+    <div id="header-chip"></div>
+  </header>
+
+  <!-- Lista de confesiones -->
+  <main id="feed" class="feed-scroll" aria-label="Feed de confesiones" aria-live="polite">
+    <p class="feed-empty">Cargando confesiones…</p>
+  </main>
+
+  <!-- Barra de compose (autenticados) -->
+  <div id="compose-bar" class="compose-bar" hidden>
+    <!-- Fila superior: hashtag selector -->
+    <div class="compose-bar__top">
+      <select id="compose-hashtag" class="compose-hashtag-select" aria-label="Elige un hashtag">
+        <!-- Poblado por feed.js -->
+      </select>
+      <!-- Botón imagen -->
+      <label class="compose-img-btn" for="compose-img-input" title="Adjuntar imagen" aria-label="Adjuntar imagen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+        </svg>
+      </label>
+      <input type="file" id="compose-img-input" class="uploader__input"
+        accept="image/jpeg,image/png,image/gif,image/webp" />
+    </div>
+
+    <!-- Preview imagen -->
+    <div id="compose-img-preview" class="compose-img-preview" hidden></div>
+
+    <!-- Progress bar -->
+    <div class="uploader__progress-track" hidden>
+      <div id="compose-progress" class="uploader__progress-bar"></div>
+    </div>
+
+    <!-- Fila de input + enviar -->
+    <div class="compose-bar__input-row">
+      <textarea
+        id="compose-input"
+        class="compose-textarea"
+        placeholder="Confiesa algo…"
+        maxlength="2000"
+        rows="2"
+        aria-label="Escribe tu confesión"
+      ></textarea>
+      <button id="compose-send-btn" class="compose-send-btn" type="button" aria-label="Publicar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Prompt de login (invitados / no autenticados) -->
+  <div id="login-prompt-bar" class="login-prompt-bar" hidden>
+    <a href="login.html" class="login-prompt-bar__link">
+      Inicia sesión para confesar
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
+      </svg>
+    </a>
+  </div>
+
+</div><!-- /#view-feed -->
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     VISTA: CHAT (Hilo de comentarios)
+════════════════════════════════════════════════════════════════ -->
+<div id="view-chat" class="view">
+
+  <!-- Header del hilo -->
+  <header class="app-header">
+    <button id="chat-back-btn" class="app-header__back" type="button" aria-label="Volver">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
+      </svg>
+    </button>
+    <h2 class="app-header__title">Hilo</h2>
+  </header>
+
+  <div class="chat-scroll">
+    <!-- Confesión original fijada arriba -->
+    <div class="chat-confession-card">
+      <div class="chat-confession-card__bar"></div>
+      <div class="chat-confession-card__inner">
+        <div class="chat-confession-card__top">
+          <div id="chat-avatar" class="rc-card__avatar"></div>
+          <div>
+            <span id="chat-hashtag" class="rc-card__tag"></span>
+            <span id="chat-time"    class="rc-card__time"></span>
+          </div>
+        </div>
+        <p id="chat-confession-text" class="chat-confession-card__text"></p>
+        <img id="chat-confession-img" class="chat-confession-card__img" alt="Imagen" hidden />
+      </div>
+    </div>
+
+    <!-- Separador -->
+    <div class="chat-divider">
+      <div class="chat-divider__line"></div>
+      <span class="chat-divider__label">Comentarios</span>
+      <div class="chat-divider__line"></div>
+    </div>
+
+    <!-- Lista de burbujas -->
+    <div id="chat-comment-list" class="chat-comment-list" role="log" aria-live="polite">
+    </div>
+  </div>
+
+  <!-- Barra de input (autenticados) -->
+  <div id="chat-input-bar" class="chat-input-bar" hidden>
+    <input
+      id="chat-comment-input"
+      class="chat-input"
+      type="text"
+      placeholder="Escribe un consejo…"
+      maxlength="500"
+      aria-label="Tu comentario"
+    />
+    <button id="chat-comment-submit" class="chat-send-btn" type="button" aria-label="Enviar">
+      Enviar
+    </button>
+  </div>
+
+  <!-- Prompt de login en el hilo -->
+  <div id="chat-login-prompt" class="chat-login-prompt" hidden>
+    <a href="login.html">Inicia sesión</a> para unirte a la conversación.
+  </div>
+
+</div><!-- /#view-chat -->
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     BOTTOM SHEET: Perfil de usuario
+════════════════════════════════════════════════════════════════ -->
+<div id="profile-overlay" class="profile-overlay"></div>
+
+<div id="profile-sheet" class="profile-sheet">
+  <div id="profile-sheet-handle" class="profile-sheet__handle"></div>
+
+  <div class="profile-sheet__body">
+    <div class="profile-sheet__user">
+      <div id="sheet-avatar" class="profile-sheet__avatar"></div>
+      <div>
+        <p id="sheet-name"  class="profile-sheet__name"></p>
+        <p id="sheet-email" class="profile-sheet__email"></p>
+      </div>
+    </div>
+
+    <div class="profile-sheet__actions">
+      <a href="profile.html" class="profile-sheet__item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
+        </svg>
+        <span>Mi Perfil y Foto</span>
+      </a>
+      <button id="sheet-signout" class="profile-sheet__signout" type="button">
+        Cerrar Sesión
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Scripts ──────────────────────────────────────────────── -->
+<script type="module">
+  import { initFeed }                            from './js/feed.js';
+  import { getCurrentUser, getProfile,
+           renderHeaderChip, onAuthStateChange,
+           signOut }                             from './js/auth.js';
+  import { getInitials }                         from './js/utils.js';
+
+  const isGuest = sessionStorage.getItem('rc_guest') === '1';
+
+  onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT' && !isGuest) window.location.replace('./login.html');
+  });
+
+  // Definir ANTES de boot para que esté disponible cuando renderHeaderChip lo busque
+  window.__openProfileSheet = function() {
+    document.getElementById('profile-sheet')?.classList.add('open');
+    document.getElementById('profile-overlay')?.classList.add('open');
+  };
+  window.__closeProfileSheet = function() {
+    document.getElementById('profile-sheet')?.classList.remove('open');
+    document.getElementById('profile-overlay')?.classList.remove('open');
+  };
+
+  async function boot() {
+    const user = await getCurrentUser();
+    if (!user && !isGuest) { window.location.replace('./login.html'); return; }
+
+    // Chip
+    const chipSlot = document.getElementById('header-chip');
+    const profile  = user ? await getProfile(user.id) : null;
+    renderHeaderChip(chipSlot, profile, openProfileSheet);
+
+    // Bottom sheet de perfil
+    if (user && profile) {
+      const sheetName   = document.getElementById('sheet-name');
+      const sheetEmail  = document.getElementById('sheet-email');
+      const sheetAvatar = document.getElementById('sheet-avatar');
+
+      if (sheetName)  sheetName.textContent  = profile.full_name;
+      if (sheetEmail) sheetEmail.textContent  = user.email;
+
+      if (sheetAvatar) {
+        if (profile.avatar_url) {
+          const img = document.createElement('img');
+          img.src = profile.avatar_url;
+          img.alt = 'Avatar';
+          img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+          sheetAvatar.appendChild(img);
+        } else {
+          sheetAvatar.textContent = getInitials(profile.full_name);
+        }
+      }
+    }
+
+    // Sign out desde el sheet
+    document.getElementById('sheet-signout')?.addEventListener('click', async () => {
+      sessionStorage.removeItem('rc_guest');
+      await signOut();
+      window.location.replace('./login.html');
+    });
+
+    // Handle del sheet
+    document.getElementById('profile-sheet-handle')?.addEventListener('click', () => window.__closeProfileSheet());
+    document.getElementById('profile-overlay')?.addEventListener('click', () => window.__closeProfileSheet());
+
+    await initFeed();
+  }
+
+  function openProfileSheet()  { window.__openProfileSheet(); }
+  function closeProfileSheet() { window.__closeProfileSheet(); }
+
+  boot();
+</script>
+
+</body>
+</html>
