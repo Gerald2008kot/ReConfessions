@@ -65,11 +65,12 @@ async function renderConfessionCard(confession) {
   if (!slot) return;
   while (slot.firstChild) slot.removeChild(slot.firstChild);
 
-  // Obtener perfil del autor para mostrar avatar (anónimo salvo dueño)
+  // Obtener perfil del autor — avatar visible para todos (sin revelar nombre)
   let authorProfile = null;
-  if (currentUser?.id === confession.user_id) {
-    authorProfile = currentProfile;
-  }
+  try {
+    const { data: ap } = await sb.from('profiles').select('id, avatar_url').eq('id', confession.user_id).single();
+    authorProfile = ap;
+  } catch { /* silencioso */ }
 
   // Reutiliza la misma estructura visual que buildCard del feed
   const card = el('div', { className: 'rc-card rc-card--thread' });
@@ -79,8 +80,9 @@ async function renderConfessionCard(confession) {
   const avatarEl = el('div', { className: 'rc-card__avatar' });
   if (authorProfile?.avatar_url) {
     const img = document.createElement('img');
-    img.src = authorProfile.avatar_url;
-    img.alt = 'Avatar';
+    img.src     = authorProfile.avatar_url;
+    img.alt     = 'Avatar anónimo';
+    img.loading = 'lazy';
     avatarEl.appendChild(img);
   } else {
     avatarEl.appendChild(Icons.user(14));
