@@ -56,7 +56,7 @@ export function closeChat() {
   stopCommentRealtime();
   stopPolling();
   activeConfession = null;
-  onBackCallback?.();
+  onBackCallback?.();  // feed.js callback calls switchView('feed', false)
 }
 
 // ── Renderizar card de la confesión en el hilo ────────────────
