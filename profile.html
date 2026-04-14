@@ -1,96 +1,115 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>My Profile — Re-Confessions</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Mi Perfil — Re-Confessions</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-
-  <link rel="stylesheet" href="css/main.css" />
-  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="css/app.css" />
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 
-<div class="site-wrapper">
+<div class="view active" id="view-profile" style="overflow-y:auto;position:relative;">
 
-  <header class="site-header" role="banner">
-    <div class="container site-header__inner">
-      <a href="index.html" class="site-header__logo">
-        <span class="site-header__logo-dot" aria-hidden="true"></span>
-        Re-Confessions
-      </a>
-      <div id="header-chip"></div>
-    </div>
+  <!-- Header -->
+  <header class="app-header">
+    <a href="index.html" class="app-header__back" aria-label="Volver al feed">
+      <!-- back arrow SVG inline para no depender de módulos en el header -->
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
+      </svg>
+    </a>
+    <h1 class="app-header__title">Mi Perfil</h1>
+    <div id="header-chip" style="width:44px"></div>
   </header>
 
-  <main class="profile-page" role="main">
-    <div class="container">
+  <!-- Perfil card -->
+  <div class="profile-hero">
 
-      <div class="profile-card">
-
-        <!-- Avatar -->
-        <div class="profile-avatar-wrap">
-          <div class="profile-avatar" id="profile-avatar-display">
-            <span id="profile-initials" class="profile-avatar__initials"></span>
-            <img id="profile-avatar-img" class="profile-avatar__img" alt="Profile picture" hidden />
-          </div>
-          <label class="profile-avatar__edit-btn" for="avatar-input" title="Change photo" aria-label="Change profile photo">
-            ✏️
-          </label>
-          <input type="file" id="avatar-input" class="uploader__input"
-            accept="image/jpeg,image/png,image/gif,image/webp" />
-        </div>
-
-        <!-- Name -->
-        <h1 id="profile-name" class="profile-name"></h1>
-        <p id="profile-email" class="profile-email"></p>
-        <span id="profile-admin-badge" class="chip__badge chip__badge--admin" hidden>Admin</span>
-
-        <!-- Avatar upload progress -->
-        <div class="uploader__progress-track" id="avatar-progress-track" hidden style="width:200px;margin:12px auto 0">
-          <div id="avatar-progress" class="uploader__progress-bar"></div>
-        </div>
-        <p id="avatar-status" class="profile-status"></p>
-
-        <div class="profile-divider"></div>
-
-        <!-- Stats -->
-        <div class="profile-stats">
-          <div class="profile-stat">
-            <span id="stat-confessions" class="profile-stat__value">—</span>
-            <span class="profile-stat__label">Confessions</span>
-          </div>
-          <div class="profile-stat">
-            <span id="stat-comments" class="profile-stat__value">—</span>
-            <span class="profile-stat__label">Replies</span>
-          </div>
-        </div>
-
-        <div class="profile-divider"></div>
-
-        <!-- Actions -->
-        <div class="profile-actions">
-          <a href="index.html" class="btn btn--ghost">← Back to Feed</a>
-          <button id="signout-btn" class="btn btn--danger" type="button">Sign Out</button>
-        </div>
-
+    <!-- Avatar con botón de editar -->
+    <div class="profile-avatar-wrap">
+      <div class="profile-avatar" id="profile-avatar-display">
+        <span id="profile-initials" class="profile-avatar__initials"></span>
+        <img id="profile-avatar-img" class="profile-avatar__img" alt="Foto de perfil" hidden />
       </div>
-
+      <label class="profile-avatar__edit-btn" for="avatar-input" aria-label="Cambiar foto">
+        <!-- pencil SVG -->
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/>
+        </svg>
+      </label>
+      <input type="file" id="avatar-input" class="uploader__input"
+        accept="image/jpeg,image/png,image/gif,image/webp" />
     </div>
-  </main>
+
+    <h2 id="profile-name"  class="profile-name"></h2>
+    <p  id="profile-email" class="profile-email"></p>
+    <span id="profile-admin-badge" class="profile-admin-badge" hidden>Admin</span>
+
+    <!-- Progress de subida -->
+    <div class="uploader__progress-track" id="avatar-progress-track" hidden style="width:180px;margin:10px auto 0">
+      <div id="avatar-progress" class="uploader__progress-bar"></div>
+    </div>
+    <p id="avatar-status" class="profile-status"></p>
+
+    <!-- Stats -->
+    <div class="profile-stats">
+      <div class="profile-stat">
+        <span id="stat-confessions" class="profile-stat__value">—</span>
+        <span class="profile-stat__label">Confesiones</span>
+      </div>
+      <div class="profile-stat">
+        <span id="stat-comments" class="profile-stat__value">—</span>
+        <span class="profile-stat__label">Respuestas</span>
+      </div>
+      <div class="profile-stat">
+        <span id="stat-likes" class="profile-stat__value">—</span>
+        <span class="profile-stat__label">Likes recibidos</span>
+      </div>
+    </div>
+
+    <!-- Acciones -->
+    <div class="profile-actions">
+      <button id="signout-btn" class="profile-signout-btn" type="button">
+        <!-- logout SVG -->
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/>
+        </svg>
+        Cerrar Sesión
+      </button>
+    </div>
+
+  </div>
+
+  <!-- Divisor -->
+  <div class="chat-divider" style="padding: 0 16px; margin: 0 0 12px">
+    <div class="chat-divider__line"></div>
+    <span class="chat-divider__label">Mis confesiones</span>
+    <div class="chat-divider__line"></div>
+  </div>
+
+  <!-- Lista de confesiones propias -->
+  <div id="profile-feed" class="feed-scroll" style="flex:none;overflow-y:visible;padding-bottom:32px">
+    <p class="feed-empty">Cargando…</p>
+  </div>
+
 </div>
 
 
 <script type="module">
-  import { sb }                                  from './js/api.js';
+  import { sb }                        from './js/api.js';
   import { getCurrentUser, getProfile,
-           signOut, renderHeaderChip }           from './js/auth.js';
-  import { uploadImage }                         from './js/upload.js';
-  import { getInitials, showToast }              from './js/utils.js';
+           signOut, renderHeaderChip } from './js/auth.js';
+  import { uploadImage }               from './js/upload.js';
+  import { getInitials, showToast }    from './js/utils.js';
+  import { loadConfessions, buildCard,
+           hashtagColor, canDelete }   from './js/feed.js';
+  import { Icons }                     from './js/icons.js';
 
   // ── Guard ────────────────────────────────────────────────
   const user = await getCurrentUser();
@@ -98,18 +117,17 @@
 
   let profile = await getProfile(user.id);
 
-  // ── Header chip ──────────────────────────────────────────
+  // ── Chip ─────────────────────────────────────────────────
+  window.__openProfileSheet = () => {};   // no sheet en esta página
   const chipSlot = document.getElementById('header-chip');
   renderHeaderChip(chipSlot, profile, () => window.location.replace('./login.html'));
 
-  // ── Render profile ───────────────────────────────────────
+  // ── Render info ───────────────────────────────────────────
   function renderProfile(p) {
     document.getElementById('profile-name').textContent  = p.full_name;
     document.getElementById('profile-email').textContent = user.email;
     document.getElementById('profile-initials').textContent = getInitials(p.full_name);
-
-    const adminBadge = document.getElementById('profile-admin-badge');
-    adminBadge.hidden = !p.is_admin;
+    document.getElementById('profile-admin-badge').hidden = !p.is_admin;
 
     const avatarImg = document.getElementById('profile-avatar-img');
     if (p.avatar_url) {
@@ -123,22 +141,86 @@
   }
   renderProfile(profile);
 
-  // ── Stats ────────────────────────────────────────────────
+  // ── Stats ─────────────────────────────────────────────────
   async function loadStats() {
-    const [{ count: cCount }, { count: cmCount }] = await Promise.all([
+    const [{ count: confCount }, { count: cmCount }] = await Promise.all([
       sb.from('confessions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       sb.from('comments').select('id',    { count: 'exact', head: true }).eq('user_id', user.id),
     ]);
-    document.getElementById('stat-confessions').textContent = cCount ?? 0;
-    document.getElementById('stat-comments').textContent    = cmCount ?? 0;
+
+    // Likes recibidos en confesiones del usuario
+    const { data: myConfessionIds } = await sb.from('confessions').select('id').eq('user_id', user.id);
+    let likesReceived = 0;
+    if (myConfessionIds?.length) {
+      const { count: lk } = await sb.from('likes')
+        .select('id', { count: 'exact', head: true })
+        .in('confession_id', myConfessionIds.map(r => r.id));
+      likesReceived = lk ?? 0;
+    }
+
+    document.getElementById('stat-confessions').textContent = confCount    ?? 0;
+    document.getElementById('stat-comments').textContent    = cmCount      ?? 0;
+    document.getElementById('stat-likes').textContent       = likesReceived;
   }
   loadStats();
 
-  // ── Avatar upload ────────────────────────────────────────
-  const avatarInput     = document.getElementById('avatar-input');
-  const progressTrack   = document.getElementById('avatar-progress-track');
-  const progressBar     = document.getElementById('avatar-progress');
-  const statusEl        = document.getElementById('avatar-status');
+  // ── Confesiones propias ───────────────────────────────────
+  const profileFeed = document.getElementById('profile-feed');
+
+  async function loadMyConfessions() {
+    while (profileFeed.firstChild) profileFeed.removeChild(profileFeed.firstChild);
+
+    const { data, error } = await sb
+      .from('confessions')
+      .select('id, user_id, content, image_url, hashtag, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) { showToast('Error cargando confesiones.', 'error'); return; }
+
+    if (!data?.length) {
+      profileFeed.appendChild(
+        Object.assign(document.createElement('p'), {
+          className:   'feed-empty',
+          textContent: 'Aún no has publicado ninguna confesión.',
+        })
+      );
+      return;
+    }
+
+    // Likes por confesión
+    const ids = data.map(c => c.id);
+    const [{ data: lk }, { data: cm }, { data: myLikes }] = await Promise.all([
+      sb.from('likes').select('confession_id').in('confession_id', ids),
+      sb.from('comments').select('confession_id').in('confession_id', ids),
+      sb.from('likes').select('confession_id').in('confession_id', ids).eq('user_id', user.id),
+    ]);
+
+    const likeMap    = buildCountMap(lk, 'confession_id');
+    const commentMap = buildCountMap(cm, 'confession_id');
+    const likedSet   = new Set(myLikes?.map(r => r.confession_id) || []);
+
+    data.forEach(c => buildCard(
+      c, profileFeed, false, false,
+      likeMap[c.id] || 0, commentMap[c.id] || 0,
+      likedSet.has(c.id), profile
+    ));
+  }
+
+  function buildCountMap(rows, key) {
+    const map = {};
+    rows?.forEach(r => { map[r[key]] = (map[r[key]] || 0) + 1; });
+    return map;
+  }
+
+  loadMyConfessions();
+
+  // ── Avatar upload ─────────────────────────────────────────
+  const avatarInput   = document.getElementById('avatar-input');
+  const progressTrack = document.getElementById('avatar-progress-track');
+  const progressBar   = document.getElementById('avatar-progress');
+  const statusEl      = document.getElementById('avatar-status');
 
   avatarInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
@@ -149,22 +231,15 @@
     progressBar.style.width = '0%';
 
     try {
-      const url = await uploadImage(file, (pct) => {
-        progressBar.style.width = pct + '%';
-      });
+      const url = await uploadImage(file, (pct) => { progressBar.style.width = pct + '%'; });
 
-      // Guardar en Supabase
-      const { error } = await sb
-        .from('profiles')
-        .update({ avatar_url: url })
-        .eq('id', user.id);
-
+      const { error } = await sb.from('profiles').update({ avatar_url: url }).eq('id', user.id);
       if (error) throw new Error(error.message);
 
       profile = { ...profile, avatar_url: url };
       renderProfile(profile);
       renderHeaderChip(chipSlot, profile, () => window.location.replace('./login.html'));
-      statusEl.textContent = '✓ Photo updated';
+      statusEl.textContent = '✓ Foto actualizada';
       setTimeout(() => { statusEl.textContent = ''; }, 3000);
     } catch (err) {
       showToast(err.message, 'error');
@@ -175,7 +250,7 @@
     }
   });
 
-  // ── Sign out ─────────────────────────────────────────────
+  // ── Sign out ──────────────────────────────────────────────
   document.getElementById('signout-btn').addEventListener('click', async () => {
     await signOut();
     window.location.replace('./login.html');
