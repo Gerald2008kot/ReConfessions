@@ -53,7 +53,7 @@ export async function initFeed() {
     window.__composeUploader = uploader; // accesible en initComposeForm
   }
 
-  await initChat(() => switchView('feed'));
+  await initChat(() => switchView('feed', false));
   await loadConfessions();
   initComposeForm();
   startRealtime();
@@ -71,11 +71,31 @@ function populateHashtagSelector() {
 }
 
 // ── Vista switch ─────────────────────────────────────────────
-export function switchView(view) {
+export function switchView(view, pushHistory = true) {
   activeView = view;
   feedView?.classList.toggle('active', view === 'feed');
   chatView?.classList.toggle('active', view === 'chat');
+
+  // Push to browser history so the phone's back button works
+  if (pushHistory) {
+    if (view === 'chat') {
+      history.pushState({ view: 'chat' }, '');
+    } else if (view === 'feed') {
+      history.pushState({ view: 'feed' }, '');
+    }
+  }
 }
+
+// Handle browser back button — intercept popstate
+window.addEventListener('popstate', (e) => {
+  if (activeView === 'chat') {
+    // Importing closeChat would create circular dependency, so use the back btn
+    import('./chat.js').then(({ closeChat }) => closeChat());
+  } else if (activeView === 'admin') {
+    document.getElementById('admin-back-btn')?.click();
+  }
+  // Don't let the browser navigate away — we handled it
+});
 
 // ── Load confessions ─────────────────────────────────────────
 export async function loadConfessions(containerEl, userId = null) {
@@ -352,24 +372,43 @@ function initComposeForm() {
 }
 
 // ── Hashtag → color ───────────────────────────────────────────
+// Each tag gets a unique, consistent color derived from its name.
+// Explicit map for the 14 known tags; unknown tags get a deterministic
+// hue from a hash so they're always distinct too.
+
+const HASHTAG_MAP = {
+  '#Confesión':      { h: 260, s: 70 },  // violeta
+  '#Desamor':        { h:   0, s: 80 },  // rojo
+  '#Traición':       { h:  25, s: 85 },  // naranja
+  '#Ruptura':        { h: 330, s: 75 },  // rosa
+  '#Secreto':        { h:  45, s: 90 },  // ámbar
+  '#Familia':        { h: 145, s: 65 },  // verde
+  '#Trabajo':        { h: 215, s: 75 },  // azul
+  '#Amistad':        { h: 175, s: 65 },  // teal
+  '#Vergüenza':      { h: 290, s: 65 },  // púrpura
+  '#Arrepentimiento':{ h:  10, s: 60 },  // rojo suave
+  '#Felicidad':      { h:  52, s: 85 },  // amarillo
+  '#Miedo':          { h: 240, s: 65 },  // índigo
+  '#Sueño':          { h: 275, s: 70 },  // lila
+  '#Enojo':          { h:   4, s: 90 },  // rojo intenso
+  '#Nostalgia':      { h: 200, s: 70 },  // azul cielo
+};
+
+function hashStr(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
 export function hashtagColor(tag) {
-  const map = {
-    '#Desamor':        { bg: 'rgba(239,68,68,0.12)',   fg: '#f87171' },
-    '#Traición':       { bg: 'rgba(249,115,22,0.12)',  fg: '#fb923c' },
-    '#Ruptura':        { bg: 'rgba(236,72,153,0.12)',  fg: '#f472b6' },
-    '#Secreto':        { bg: 'rgba(234,179,8,0.12)',   fg: '#facc15' },
-    '#Familia':        { bg: 'rgba(34,197,94,0.12)',   fg: '#4ade80' },
-    '#Trabajo':        { bg: 'rgba(59,130,246,0.12)',  fg: '#60a5fa' },
-    '#Amistad':        { bg: 'rgba(20,184,166,0.12)',  fg: '#2dd4bf' },
-    '#Vergüenza':      { bg: 'rgba(168,85,247,0.12)',  fg: '#c084fc' },
-    '#Arrepentimiento':{ bg: 'rgba(239,68,68,0.10)',   fg: '#fca5a5' },
-    '#Felicidad':      { bg: 'rgba(234,179,8,0.12)',   fg: '#fde68a' },
-    '#Miedo':          { bg: 'rgba(99,102,241,0.12)',  fg: '#818cf8' },
-    '#Sueño':          { bg: 'rgba(155,127,255,0.12)', fg: '#a78bfa' },
-    '#Enojo':          { bg: 'rgba(239,68,68,0.15)',   fg: '#ef4444' },
-    '#Nostalgia':      { bg: 'rgba(59,130,246,0.12)',  fg: '#93c5fd' },
+  const entry = HASHTAG_MAP[tag];
+  const h = entry ? entry.h : (hashStr(tag) % 360);
+  const s = entry ? entry.s : 65;
+  // bg: very dark tint (dark theme friendly), fg: vivid pastel
+  return {
+    bg: `hsla(${h},${s}%,60%,0.13)`,
+    fg: `hsl(${h},${Math.min(s + 10, 95)}%,72%)`,
   };
-  return map[tag] || { bg: 'rgba(155,127,255,0.12)', fg: '#a78bfa' };
 }
 
 // ── Realtime ──────────────────────────────────────────────────
