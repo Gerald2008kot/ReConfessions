@@ -21,7 +21,7 @@
 
   <!-- Header fijo -->
   <header class="app-header">
-    <h1 class="app-header__title">ReConfessions</h1>
+    <h1 class="app-header__title">Feed</h1>
 
     <!-- Chip de sesión -->
     <div id="header-chip"></div>
@@ -104,21 +104,8 @@
   </header>
 
   <div class="chat-scroll">
-    <!-- Confesión original fijada arriba -->
-    <div class="chat-confession-card">
-      <div class="chat-confession-card__bar"></div>
-      <div class="chat-confession-card__inner">
-        <div class="chat-confession-card__top">
-          <div id="chat-avatar" class="rc-card__avatar"></div>
-          <div>
-            <span id="chat-hashtag" class="rc-card__tag"></span>
-            <span id="chat-time"    class="rc-card__time"></span>
-          </div>
-        </div>
-        <p id="chat-confession-text" class="chat-confession-card__text"></p>
-        <img id="chat-confession-img" class="chat-confession-card__img" alt="Imagen" hidden />
-      </div>
-    </div>
+    <!-- Slot de la confesión (renderizado por chat.js con estructura rc-card) -->
+    <div id="chat-confession-slot" class="chat-confession-slot"></div>
 
     <!-- Separador -->
     <div class="chat-divider">
