@@ -1,153 +1,82 @@
-// js/feed.js
+// js/chat.js
 // ============================================================
-// Feed — cards compactas, thumbnail lateral, avatar, SVGs
+// Vista de Hilo — misma estructura compacta que rc-card
 // ============================================================
 
-import { sb }                                  from './api.js';
-import { getCurrentUser, getProfile }          from './auth.js';
+import { sb }                                    from './api.js';
+import { getCurrentUser, getProfile }            from './auth.js';
 import { el, formatDate, showToast, getInitials } from './utils.js';
-import { initImageUploader }                   from './upload.js';
-import { initChat, openChat }                  from './chat.js';
-import { Icons }                               from './icons.js';
+import { Icons }                                 from './icons.js';
+import { hashtagColor, canDelete as feedCanDelete } from './feed.js';
 
-let currentUser    = null;
-let currentProfile = null;
+let currentUser      = null;
+let currentProfile   = null;
+let activeConfession = null;
+let onBackCallback   = null;
 
-let realtimeChannel  = null;
-let pollingInterval  = null;
-let lastConfessionId = null;
-let activeView       = 'feed';
+let commentListEl, commentInputEl, commentSubmitEl,
+    commentLoginPrompt, chatInputBar;
 
-let feedEl, feedView, chatView,
-    composeInput, composeHashtag, composeImgInput,
-    composeImgPreview, composeProgressBar, composeSendBtn;
+let realtimeChannel = null;
+let pollingInterval = null;
+let lastCommentId   = null;
 
-export const HASHTAGS = [
-  '#Confesión','#Desamor','#Traición','#Ruptura','#Secreto',
-  '#Familia','#Trabajo','#Amistad','#Vergüenza','#Arrepentimiento',
-  '#Felicidad','#Miedo','#Sueño','#Enojo','#Nostalgia',
-];
-
-// ── Init ────────────────────────────────────────────────────
-export async function initFeed() {
-  feedEl             = document.getElementById('feed');
-  feedView           = document.getElementById('view-feed');
-  chatView           = document.getElementById('view-chat');
-  composeInput       = document.getElementById('compose-input');
-  composeHashtag     = document.getElementById('compose-hashtag');
-  composeImgInput    = document.getElementById('compose-img-input');
-  composeImgPreview  = document.getElementById('compose-img-preview');
-  composeProgressBar = document.getElementById('compose-progress');
-  composeSendBtn     = document.getElementById('compose-send-btn');
-
-  currentUser = await getCurrentUser();
+// ── Init ─────────────────────────────────────────────────────
+export async function initChat(onBack) {
+  onBackCallback = onBack;
+  currentUser    = await getCurrentUser();
   if (currentUser) currentProfile = await getProfile(currentUser.id);
 
-  document.getElementById('compose-bar')?.toggleAttribute('hidden', !currentUser);
-  document.getElementById('login-prompt-bar')?.toggleAttribute('hidden', !!currentUser);
+  commentListEl      = document.getElementById('chat-comment-list');
+  commentInputEl     = document.getElementById('chat-comment-input');
+  commentSubmitEl    = document.getElementById('chat-comment-submit');
+  commentLoginPrompt = document.getElementById('chat-login-prompt');
+  chatInputBar       = document.getElementById('chat-input-bar');
 
-  populateHashtagSelector();
-
-  if (composeImgInput) {
-    const uploader = initImageUploader(composeImgInput, composeImgPreview, composeProgressBar);
-    window.__composeUploader = uploader; // accesible en initComposeForm
-  }
-
-  await initChat(() => switchView('feed'));
-  await loadConfessions();
-  initComposeForm();
-  startRealtime();
+  document.getElementById('chat-back-btn')?.addEventListener('click', closeChat);
+  initCommentForm();
 }
 
-// ── Hashtag selector ─────────────────────────────────────────
-function populateHashtagSelector() {
-  if (!composeHashtag) return;
-  while (composeHashtag.firstChild) composeHashtag.removeChild(composeHashtag.firstChild);
-  HASHTAGS.forEach(tag => {
-    const opt = document.createElement('option');
-    opt.value = opt.textContent = tag;
-    composeHashtag.appendChild(opt);
-  });
+// ── Abrir hilo ────────────────────────────────────────────────
+export async function openChat(confession) {
+  activeConfession = confession;
+  lastCommentId    = null;
+
+  // Renderizar la confesión original con el mismo estilo de rc-card compacta
+  renderConfessionCard(confession);
+
+  chatInputBar.hidden       = !currentUser;
+  commentLoginPrompt.hidden = !!currentUser;
+
+  await loadComments(confession.id);
+  startCommentRealtime(confession.id);
 }
 
-// ── Vista switch ─────────────────────────────────────────────
-export function switchView(view) {
-  activeView = view;
-  feedView?.classList.toggle('active', view === 'feed');
-  chatView?.classList.toggle('active', view === 'chat');
+export function closeChat() {
+  stopCommentRealtime();
+  stopPolling();
+  activeConfession = null;
+  onBackCallback?.();
 }
 
-// ── Load confessions ─────────────────────────────────────────
-export async function loadConfessions(containerEl, userId = null) {
-  const target = containerEl || feedEl;
-  let query = sb
-    .from('confessions')
-    .select('id, user_id, content, image_url, hashtag, created_at')
-    .order('created_at', { ascending: false })
-    .limit(50);
-  if (userId) query = query.eq('user_id', userId);
+// ── Renderizar card de la confesión en el hilo ────────────────
+async function renderConfessionCard(confession) {
+  const slot = document.getElementById('chat-confession-slot');
+  if (!slot) return;
+  while (slot.firstChild) slot.removeChild(slot.firstChild);
 
-  const { data, error } = await query;
-  if (error) { showToast('Error cargando confesiones.', 'error'); return; }
+  // Obtener perfil del autor — avatar visible para todos (sin revelar nombre)
+  let authorProfile = null;
+  try {
+    const { data: ap } = await sb.from('profiles').select('id, avatar_url').eq('id', confession.user_id).single();
+    authorProfile = ap;
+  } catch { /* silencioso */ }
 
-  while (target.firstChild) target.removeChild(target.firstChild);
+  // Reutiliza la misma estructura visual que buildCard del feed
+  const card = el('div', { className: 'rc-card rc-card--thread' });
 
-  if (!data?.length) {
-    target.appendChild(el('p', { className: 'feed-empty', textContent: 'Sin confesiones todavía.' }));
-    return;
-  }
-
-  // Likes del usuario actual
-  let userLikedSet = new Set();
-  if (currentUser) {
-    const { data: liked } = await sb.from('likes').select('confession_id').eq('user_id', currentUser.id);
-    userLikedSet = new Set(liked?.map(r => r.confession_id) || []);
-  }
-
-  const ids = data.map(c => c.id);
-  const [{ data: lk }, { data: cm }] = await Promise.all([
-    sb.from('likes').select('confession_id').in('confession_id', ids),
-    sb.from('comments').select('confession_id').in('confession_id', ids),
-  ]);
-
-  const likeMap    = buildCountMap(lk, 'confession_id');
-  const commentMap = buildCountMap(cm, 'confession_id');
-
-  // Cargar avatares de los autores en batch
-  const userIds   = [...new Set(data.map(c => c.user_id))];
-  const { data: profiles } = await sb.from('profiles').select('id, avatar_url, full_name').in('id', userIds);
-  const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
-
-  data.forEach(c => buildCard(
-    c, target, false, false,
-    likeMap[c.id]    || 0,
-    commentMap[c.id] || 0,
-    userLikedSet.has(c.id),
-    profileMap[c.user_id] || null
-  ));
-
-  if (!userId) lastConfessionId = data[0]?.id;
-}
-
-function buildCountMap(rows, key) {
-  const map = {};
-  rows?.forEach(r => { map[r[key]] = (map[r[key]] || 0) + 1; });
-  return map;
-}
-
-// ── Card compacta ─────────────────────────────────────────────
-export function buildCard(confession, container, prependToTop, animate, likeCount, commentCount, isLiked, authorProfile) {
-  if (container === feedEl && document.getElementById(`card-${confession.id}`)) return;
-
-  const card = el('article', {
-    className: `rc-card${animate ? ' rc-card--new' : ''}`,
-    attrs:     { id: container === feedEl ? `card-${confession.id}` : undefined },
-  });
-
-  // ── Fila superior: avatar + hashtag + tiempo + borrar ────
+  // Top row
   const top = el('div', { className: 'rc-card__top' });
-
-  // Avatar del autor visible para todos (sin revelar nombre)
   const avatarEl = el('div', { className: 'rc-card__avatar' });
   if (authorProfile?.avatar_url) {
     const img = document.createElement('img');
@@ -160,101 +89,51 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
   }
   top.appendChild(avatarEl);
 
-  // Hashtag pill
   const tag      = confession.hashtag || '#Confesión';
   const tagColor = hashtagColor(tag);
   top.appendChild(el('span', {
-    className: 'rc-card__tag',
+    className:   'rc-card__tag',
     textContent: tag,
-    attrs: { style: `background:${tagColor.bg};color:${tagColor.fg}` },
+    attrs:       { style: `background:${tagColor.bg};color:${tagColor.fg}` },
   }));
-
   top.appendChild(el('span', { className: 'rc-card__time', textContent: formatDate(confession.created_at) }));
-
-  if (canDelete(confession.user_id)) {
-    const delBtn = el('button', {
-      className: 'rc-card__del',
-      attrs:     { type: 'button', 'aria-label': 'Borrar' },
-    });
-    delBtn.appendChild(Icons.trash(15));
-    delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteConfession(confession.id, card); });
-    top.appendChild(delBtn);
-  }
-
   card.appendChild(top);
 
-  // ── Fila media: texto + thumbnail lateral ────────────────
-  const body = el('div', { className: 'rc-card__body-row' });
-
-  body.appendChild(el('p', { className: 'rc-card__text', textContent: confession.content }));
+  // Body + thumbnail
+  const bodyRow = el('div', { className: 'rc-card__body-row' });
+  bodyRow.appendChild(el('p', { className: 'rc-card__text', textContent: confession.content }));
 
   if (confession.image_url) {
     const thumb = el('div', { className: 'rc-card__thumb' });
     const img   = document.createElement('img');
     img.src     = confession.image_url;
-    img.alt     = 'Imagen adjunta';
+    img.alt     = 'Imagen';
     img.loading = 'lazy';
-    // Abrir modal al tocar la imagen
-    img.addEventListener('click', (e) => { e.stopPropagation(); openImageModal(confession.image_url); });
+    img.addEventListener('click', () => openImageModal(confession.image_url));
     thumb.appendChild(img);
-    body.appendChild(thumb);
+    bodyRow.appendChild(thumb);
   }
+  card.appendChild(bodyRow);
 
-  card.appendChild(body);
+  // Barra de acento violeta izquierda
+  card.style.borderLeft = '3px solid var(--accent)';
 
-  // ── Footer: likes + comentarios ──────────────────────────
-  const footer = el('div', { className: 'rc-card__footer' });
-
-  const likeBtn = el('button', {
-    className: `rc-card__action${isLiked ? ' rc-card__action--liked' : ''}`,
-    attrs:     { type: 'button', 'aria-label': 'Me gusta' },
-  });
-  likeBtn.appendChild(Icons.heart(isLiked, 17));
-  likeBtn.appendChild(el('span', { className: 'rc-card__action-count', textContent: String(likeCount) }));
-  likeBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleLike(confession.id, likeBtn); });
-  footer.appendChild(likeBtn);
-
-  const commentBtn = el('button', {
-    className: 'rc-card__action',
-    attrs:     { type: 'button', 'aria-label': 'Comentarios' },
-  });
-  commentBtn.appendChild(Icons.chat(17));
-  commentBtn.appendChild(el('span', { className: 'rc-card__action-count', textContent: String(commentCount) }));
-  commentBtn.addEventListener('click', (e) => { e.stopPropagation(); handleOpenChat(confession); });
-  footer.appendChild(commentBtn);
-
-  card.appendChild(footer);
-
-  card.addEventListener('click', () => handleOpenChat(confession));
-
-  container.querySelector('.feed-empty')?.remove();
-  if (prependToTop) container.insertBefore(card, container.firstChild);
-  else              container.appendChild(card);
-
-  if (animate) {
-    card.addEventListener('animationend', () => card.classList.remove('rc-card--new'), { once: true });
-  }
+  slot.appendChild(card);
 }
 
-// ── Image modal ───────────────────────────────────────────────
+// ── Modal imagen ──────────────────────────────────────────────
 function openImageModal(url) {
   const existing = document.getElementById('img-modal');
   if (existing) existing.remove();
 
   const overlay = el('div', {
     className: 'img-modal',
-    attrs:     { id: 'img-modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Imagen completa' },
+    attrs:     { id: 'img-modal', role: 'dialog', 'aria-modal': 'true' },
   });
-
   const img = document.createElement('img');
-  img.src       = url;
-  img.alt       = 'Imagen completa';
-  img.className = 'img-modal__img';
+  img.src = url; img.alt = 'Imagen completa'; img.className = 'img-modal__img';
 
-  const closeBtn = el('button', {
-    className: 'img-modal__close',
-    attrs:     { type: 'button', 'aria-label': 'Cerrar' },
-  });
+  const closeBtn = el('button', { className: 'img-modal__close', attrs: { type: 'button' } });
   closeBtn.appendChild(Icons.close(20));
 
   const close = () => overlay.remove();
@@ -268,150 +147,159 @@ function openImageModal(url) {
   requestAnimationFrame(() => overlay.classList.add('img-modal--open'));
 }
 
-// ── Open chat ─────────────────────────────────────────────────
-async function handleOpenChat(confession) {
-  switchView('chat');
-  await openChat(confession);
+// ── Cargar comentarios ────────────────────────────────────────
+async function loadComments(confessionId) {
+  while (commentListEl.firstChild) commentListEl.removeChild(commentListEl.firstChild);
+
+  const { data, error } = await sb
+    .from('comments')
+    .select('id, user_id, content, created_at')
+    .eq('confession_id', confessionId)
+    .order('created_at', { ascending: true });
+
+  if (error) { showToast('Error al cargar comentarios.', 'error'); return; }
+
+  if (!data?.length) {
+    commentListEl.appendChild(el('p', { className: 'chat-empty', textContent: 'Sé el primero en responder.' }));
+    return;
+  }
+
+  data.forEach(c => appendBubble(c, false));
+  lastCommentId = data[data.length - 1].id;
+  scrollToBottom();
 }
 
-// ── Likes ─────────────────────────────────────────────────────
-async function toggleLike(confessionId, btn) {
-  if (!currentUser) { showToast('Inicia sesión para dar like.', 'info'); return; }
-  const isLiked   = btn.classList.contains('rc-card__action--liked');
-  const countSpan = btn.querySelector('.rc-card__action-count');
-  let count       = parseInt(countSpan.textContent) || 0;
+// ── Burbuja ───────────────────────────────────────────────────
+function appendBubble(comment, animate) {
+  if (document.getElementById(`bubble-${comment.id}`)) return;
+  commentListEl.querySelector('.chat-empty')?.remove();
 
-  // Actualizar SVG del corazón
-  const updateIcon = (filled) => {
-    const oldSvg = btn.querySelector('svg');
-    if (oldSvg) btn.replaceChild(Icons.heart(filled, 17), oldSvg);
-  };
+  const isOwn = currentUser && comment.user_id === currentUser.id;
 
-  if (isLiked) {
-    btn.classList.remove('rc-card__action--liked');
-    updateIcon(false);
-    countSpan.textContent = String(count - 1);
-    await sb.from('likes').delete().match({ confession_id: confessionId, user_id: currentUser.id });
-  } else {
-    btn.classList.add('rc-card__action--liked');
-    updateIcon(true);
-    countSpan.textContent = String(count + 1);
-    btn.classList.add('rc-card__action--pop');
-    btn.addEventListener('animationend', () => btn.classList.remove('rc-card__action--pop'), { once: true });
-    await sb.from('likes').insert({ confession_id: confessionId, user_id: currentUser.id });
+  const row = el('div', {
+    className: `chat-row${isOwn ? ' chat-row--own' : ''}${animate ? ' chat-row--new' : ''}`,
+    attrs:     { id: `bubble-${comment.id}` },
+  });
+
+  // Avatar del otro
+  if (!isOwn) {
+    const av = el('div', { className: 'chat-avatar-sm' });
+    av.appendChild(Icons.user(12));
+    row.appendChild(av);
+  }
+
+  const wrap = el('div', { className: 'chat-bubble-wrap' });
+
+  const bubble = el('div', { className: `chat-bubble${isOwn ? ' chat-bubble--own' : ''}` });
+  bubble.appendChild(el('p', { className: 'chat-bubble__text', textContent: comment.content }));
+
+  if (feedCanDelete(comment.user_id)) {
+    const delBtn = el('button', {
+      className: 'chat-delete-btn',
+      attrs:     { type: 'button', 'aria-label': 'Borrar' },
+    });
+    delBtn.appendChild(Icons.trash(12));
+    delBtn.addEventListener('click', () => deleteComment(comment.id));
+    wrap.appendChild(delBtn);
+  }
+
+  wrap.appendChild(bubble);
+  wrap.appendChild(el('span', { className: 'chat-bubble__time', textContent: formatDate(comment.created_at) }));
+  row.appendChild(wrap);
+
+  // Avatar propio
+  if (isOwn) {
+    const av = el('div', { className: 'chat-avatar-sm chat-avatar-sm--own' });
+    if (currentProfile?.avatar_url) {
+      const img = document.createElement('img');
+      img.src = currentProfile.avatar_url; img.alt = 'Tu avatar';
+      img.className = 'chat-avatar-img';
+      av.appendChild(img);
+    } else {
+      av.appendChild(el('span', { textContent: getInitials(currentProfile?.full_name || '?'), className: 'chat-avatar-sm__initials' }));
+    }
+    row.appendChild(av);
+  }
+
+  commentListEl.appendChild(row);
+  if (animate) scrollToBottom();
+}
+
+// ── Borrar comentario ─────────────────────────────────────────
+async function deleteComment(id) {
+  if (!confirm('¿Borrar este comentario?')) return;
+  const { error } = await sb.from('comments').delete().eq('id', id);
+  if (error) { showToast(error.message, 'error'); return; }
+  document.getElementById(`bubble-${id}`)?.remove();
+  showToast('Comentario eliminado.', 'success');
+  if (!commentListEl.querySelector('.chat-row')) {
+    commentListEl.appendChild(el('p', { className: 'chat-empty', textContent: 'Sé el primero en responder.' }));
   }
 }
 
-// ── Delete ────────────────────────────────────────────────────
-async function deleteConfession(id, cardEl) {
-  if (!confirm('¿Borrar esta confesión? No se puede deshacer.')) return;
-  const { error } = await sb.from('confessions').delete().eq('id', id);
-  if (error) { showToast(error.message, 'error'); return; }
-  cardEl?.remove() ?? document.getElementById(`card-${id}`)?.remove();
-  showToast('Confesión eliminada.', 'success');
-}
-
-export function canDelete(rowUserId) {
-  if (!currentUser) return false;
-  return currentUser.id === rowUserId || !!currentProfile?.is_admin;
-}
-
-// ── Compose form ──────────────────────────────────────────────
-function initComposeForm() {
-  if (!composeSendBtn || !currentUser) return;
-
-  composeSendBtn.addEventListener('click', async () => {
-    const content = composeInput?.value.trim();
-    const hashtag = composeHashtag?.value || '#Confesión';
+// ── Formulario comentario ─────────────────────────────────────
+function initCommentForm() {
+  if (!commentSubmitEl) return;
+  const send = async () => {
+    if (!currentUser || !activeConfession) return;
+    const content = commentInputEl.value.trim();
     if (!content) return;
-
-    composeSendBtn.disabled = true;
+    commentSubmitEl.disabled = true;
     try {
-      let imageUrl = null;
-      const uploader = window.__composeUploader;
-      if (uploader?.getFile()) imageUrl = await uploader.triggerUpload();
-
-      const { error } = await sb.from('confessions').insert({
-        user_id: currentUser.id, content, image_url: imageUrl, hashtag,
+      const { error } = await sb.from('comments').insert({
+        confession_id: activeConfession.id, user_id: currentUser.id, content,
       });
       if (error) throw new Error(error.message);
-
-      composeInput.value = '';
-      uploader?.reset();
-      showToast('¡Confesión publicada!', 'success');
+      commentInputEl.value = '';
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
-      composeSendBtn.disabled = false;
+      commentSubmitEl.disabled = false;
+      commentInputEl.focus();
     }
-  });
-
-  composeInput?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); composeSendBtn.click(); }
-  });
-}
-
-// ── Hashtag → color ───────────────────────────────────────────
-export function hashtagColor(tag) {
-  const map = {
-    '#Desamor':        { bg: 'rgba(239,68,68,0.12)',   fg: '#f87171' },
-    '#Traición':       { bg: 'rgba(249,115,22,0.12)',  fg: '#fb923c' },
-    '#Ruptura':        { bg: 'rgba(236,72,153,0.12)',  fg: '#f472b6' },
-    '#Secreto':        { bg: 'rgba(234,179,8,0.12)',   fg: '#facc15' },
-    '#Familia':        { bg: 'rgba(34,197,94,0.12)',   fg: '#4ade80' },
-    '#Trabajo':        { bg: 'rgba(59,130,246,0.12)',  fg: '#60a5fa' },
-    '#Amistad':        { bg: 'rgba(20,184,166,0.12)',  fg: '#2dd4bf' },
-    '#Vergüenza':      { bg: 'rgba(168,85,247,0.12)',  fg: '#c084fc' },
-    '#Arrepentimiento':{ bg: 'rgba(239,68,68,0.10)',   fg: '#fca5a5' },
-    '#Felicidad':      { bg: 'rgba(234,179,8,0.12)',   fg: '#fde68a' },
-    '#Miedo':          { bg: 'rgba(99,102,241,0.12)',  fg: '#818cf8' },
-    '#Sueño':          { bg: 'rgba(155,127,255,0.12)', fg: '#a78bfa' },
-    '#Enojo':          { bg: 'rgba(239,68,68,0.15)',   fg: '#ef4444' },
-    '#Nostalgia':      { bg: 'rgba(59,130,246,0.12)',  fg: '#93c5fd' },
   };
-  return map[tag] || { bg: 'rgba(155,127,255,0.12)', fg: '#a78bfa' };
+  commentSubmitEl.addEventListener('click', send);
+  commentInputEl?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
 }
 
 // ── Realtime ──────────────────────────────────────────────────
-function startRealtime() {
+function startCommentRealtime(confessionId) {
+  stopCommentRealtime();
   try {
-    realtimeChannel = sb.channel('rc-feed')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'confessions' },
-        async ({ new: row }) => {
-          // Obtener perfil del autor
-          const { data: p } = await sb.from('profiles').select('id, avatar_url, full_name').eq('id', row.user_id).single();
-          buildCard(row, feedEl, true, true, 0, 0, false, p);
-          lastConfessionId = row.id;
-        })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'confessions' },
-        ({ old: row }) => document.getElementById(`card-${row.id}`)?.remove())
+    realtimeChannel = sb.channel(`chat-${confessionId}`)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'comments', filter: `confession_id=eq.${confessionId}` },
+        ({ new: row }) => { appendBubble(row, true); lastCommentId = row.id; })
+      .on('postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'comments' },
+        ({ old: row }) => document.getElementById(`bubble-${row.id}`)?.remove())
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED')                              stopPolling();
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') startPolling();
+        if (status === 'SUBSCRIBED') stopPolling();
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') startPolling(confessionId);
       });
-  } catch (err) {
-    console.warn('[realtime]', err);
-    startPolling();
-  }
+  } catch { startPolling(confessionId); }
 }
 
-function startPolling() {
+function stopCommentRealtime() {
+  if (realtimeChannel) { sb.removeChannel(realtimeChannel); realtimeChannel = null; }
+}
+
+function startPolling(confessionId) {
   stopPolling();
   pollingInterval = setInterval(async () => {
-    if (!lastConfessionId) return;
-    const { data: ref } = await sb.from('confessions').select('created_at').eq('id', lastConfessionId).single();
-    if (!ref) return;
-    const { data } = await sb.from('confessions')
-      .select('id, user_id, content, image_url, hashtag, created_at')
-      .gt('created_at', ref.created_at).order('created_at', { ascending: true });
-    if (data?.length) {
-      const ids = data.map(c => c.user_id);
-      const { data: profiles } = await sb.from('profiles').select('id, avatar_url, full_name').in('id', ids);
-      const pm = Object.fromEntries((profiles||[]).map(p=>[p.id,p]));
-      data.forEach(c => buildCard(c, feedEl, true, true, 0, 0, false, pm[c.user_id]));
-      lastConfessionId = data[data.length - 1].id;
+    let baseTime = '1970-01-01T00:00:00Z';
+    if (lastCommentId) {
+      const { data: ref } = await sb.from('comments').select('created_at').eq('id', lastCommentId).single();
+      if (ref) baseTime = ref.created_at;
     }
+    const { data } = await sb.from('comments')
+      .select('id, user_id, content, created_at')
+      .eq('confession_id', confessionId).gt('created_at', baseTime).order('created_at', { ascending: true });
+    if (data?.length) { data.forEach(c => appendBubble(c, true)); lastCommentId = data[data.length-1].id; }
   }, 10_000);
 }
 
 function stopPolling() { clearInterval(pollingInterval); pollingInterval = null; }
+function scrollToBottom() { requestAnimationFrame(() => { commentListEl.scrollTop = commentListEl.scrollHeight; }); }
