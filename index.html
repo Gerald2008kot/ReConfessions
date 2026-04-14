@@ -166,11 +166,84 @@
         </svg>
         <span>Mi Perfil y Foto</span>
       </a>
+      <!-- Solo visible para admins — controlado por JS -->
+      <button id="sheet-admin" class="profile-sheet__item profile-sheet__item--btn" type="button" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        <span>Administración</span>
+        <span class="profile-sheet__item-badge">Admin</span>
+      </button>
       <button id="sheet-signout" class="profile-sheet__signout" type="button">
         Cerrar Sesión
       </button>
     </div>
   </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     VISTA: ADMINISTRACIÓN
+════════════════════════════════════════════════════════════════ -->
+<div id="view-admin" class="view" hidden>
+
+  <header class="app-header">
+    <button id="admin-back-btn" class="app-header__back" type="button" aria-label="Volver">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
+      </svg>
+    </button>
+    <h2 class="app-header__title">Administración</h2>
+    <div style="width:38px"></div>
+  </header>
+
+  <!-- Tabs -->
+  <div class="admin-tabs">
+    <button id="admin-tab-users"  class="admin-tab active" type="button">Usuarios</button>
+    <button id="admin-tab-create" class="admin-tab"        type="button">Crear Usuario</button>
+  </div>
+
+  <!-- Panel: Usuarios -->
+  <div id="admin-panel-users" class="admin-panel active">
+    <div id="admin-user-list" class="admin-user-list">
+      <p class="admin-loading">Cargando…</p>
+    </div>
+  </div>
+
+  <!-- Panel: Crear Usuario -->
+  <div id="admin-panel-create" class="admin-panel">
+    <form id="admin-create-form" class="admin-create-form" novalidate>
+
+      <div class="admin-field">
+        <label for="admin-create-name">Nombre completo</label>
+        <input type="text" id="admin-create-name" class="admin-input"
+          placeholder="Nombre del usuario" maxlength="80" required />
+      </div>
+
+      <div class="admin-field">
+        <label for="admin-create-email">Correo electrónico</label>
+        <input type="email" id="admin-create-email" class="admin-input"
+          placeholder="correo@ejemplo.com" required />
+      </div>
+
+      <div class="admin-field">
+        <label for="admin-create-password">Contraseña temporal</label>
+        <input type="password" id="admin-create-password" class="admin-input"
+          placeholder="Mínimo 8 caracteres" minlength="8" required />
+      </div>
+
+      <div class="admin-checkbox-row">
+        <input type="checkbox" id="admin-create-is-admin" />
+        <label for="admin-create-is-admin">Dar permisos de administrador</label>
+      </div>
+
+      <p id="admin-create-error" class="admin-error" role="alert"></p>
+
+      <button type="submit" class="admin-submit-btn">Crear Usuario</button>
+    </form>
+  </div>
+
 </div>
 
 
@@ -181,6 +254,7 @@
            renderHeaderChip, onAuthStateChange,
            signOut }                             from './js/auth.js';
   import { getInitials }                         from './js/utils.js';
+  import { initAdmin, openAdmin, closeAdmin }    from './js/admin.js';
 
   const isGuest = sessionStorage.getItem('rc_guest') === '1';
 
@@ -239,6 +313,25 @@
     // Handle del sheet
     document.getElementById('profile-sheet-handle')?.addEventListener('click', () => window.__closeProfileSheet());
     document.getElementById('profile-overlay')?.addEventListener('click', () => window.__closeProfileSheet());
+
+    // Mostrar botón de admin si corresponde
+    if (profile?.is_admin) {
+      const adminBtn = document.getElementById('sheet-admin');
+      if (adminBtn) {
+        adminBtn.hidden = false;
+        adminBtn.addEventListener('click', () => {
+          window.__closeProfileSheet();
+          openAdmin();
+        });
+      }
+    }
+
+    // Init admin (solo carga lógica, no muestra nada todavía)
+    await initAdmin(() => {
+      document.getElementById('view-admin')?.classList.remove('active');
+      document.getElementById('view-admin').hidden = true;
+      document.getElementById('view-feed')?.classList.add('active');
+    });
 
     await initFeed();
   }
