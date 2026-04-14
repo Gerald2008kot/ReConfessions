@@ -43,6 +43,7 @@ export async function openAdmin() {
   document.getElementById('view-chat')?.classList.remove('active');
   adminView.hidden = false;
   requestAnimationFrame(() => adminView.classList.add('active'));
+  history.pushState({ view: 'admin' }, '');
   switchAdminTab('users');
 }
 
