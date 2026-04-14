@@ -326,8 +326,8 @@
       }
     }
 
-    // Init admin (solo carga lógica, no muestra nada todavía)
-    await initAdmin(() => {
+    // initAdmin y initFeed en paralelo — no bloquear el feed
+    initAdmin(() => {
       document.getElementById('view-admin')?.classList.remove('active');
       document.getElementById('view-admin').hidden = true;
       document.getElementById('view-feed')?.classList.add('active');
