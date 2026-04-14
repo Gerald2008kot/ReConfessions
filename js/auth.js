@@ -254,20 +254,28 @@ export function initAuthForm() {
     e.preventDefault();
     errorEl.textContent = '';
 
-    const email    = emailInput.value.trim();
+    // Sanitize — remove all whitespace including invisible Unicode chars
+    const email    = emailInput.value.replace(/\s/g, '').toLowerCase();
     const password = passInput.value;
     const name     = nameInput?.value.trim();
 
-    if (!email || !password) {
-      errorEl.textContent = 'Email and password are required.';
+    // Basic email format check before hitting Supabase
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      errorEl.textContent = 'Ingresa un correo electrónico válido.';
+      emailInput.value = email; // show cleaned value
+      return;
+    }
+    if (!password) {
+      errorEl.textContent = 'La contraseña es requerida.';
       return;
     }
     if (mode === 'signup' && !name) {
-      errorEl.textContent = 'Please enter your name.';
+      errorEl.textContent = 'Por favor ingresa tu nombre.';
       return;
     }
     if (password.length < 8) {
-      errorEl.textContent = 'Password must be at least 8 characters.';
+      errorEl.textContent = 'La contraseña debe tener al menos 8 caracteres.';
       return;
     }
 
