@@ -147,13 +147,13 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
   // ── Fila superior: avatar + hashtag + tiempo + borrar ────
   const top = el('div', { className: 'rc-card__top' });
 
-  // Avatar del autor (anónimo para visitantes, real para el dueño)
+  // Avatar del autor visible para todos (sin revelar nombre)
   const avatarEl = el('div', { className: 'rc-card__avatar' });
-  if (authorProfile?.avatar_url && currentUser?.id === confession.user_id) {
-    // Solo el dueño ve su propio avatar
+  if (authorProfile?.avatar_url) {
     const img = document.createElement('img');
-    img.src = authorProfile.avatar_url;
-    img.alt = 'Avatar';
+    img.src     = authorProfile.avatar_url;
+    img.alt     = 'Avatar anónimo';
+    img.loading = 'lazy';
     avatarEl.appendChild(img);
   } else {
     avatarEl.appendChild(Icons.user(14));
