@@ -1185,6 +1185,8 @@ img { display: block; max-width: 100%; }
   cursor: pointer;
   touch-action: manipulation;
 }
+/* Ensure hidden attribute always hides regardless of display:flex */
+[hidden] { display: none !important; }
 .profile-sheet__item-badge {
   margin-left: auto;
   font-size: 0.6rem;
