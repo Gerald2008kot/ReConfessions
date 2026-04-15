@@ -9,6 +9,7 @@ import { el, formatDate, showToast, getInitials } from './utils.js';
 import { initImageUploader }                   from './upload.js';
 import { initChat, openChat }                  from './chat.js';
 import { Icons }                               from './icons.js';
+import { tagColor, countMap as sharedCountMap } from './shared.js';
 
 let currentUser    = null;
 let currentProfile = null;
@@ -182,11 +183,11 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
 
   // Hashtag pill
   const tag      = confession.hashtag || '#Confesión';
-  const tagColor = hashtagColor(tag);
+  const tc = tagColor(tag);
   top.appendChild(el('span', {
     className: 'rc-card__tag',
     textContent: tag,
-    attrs: { style: `background:${tagColor.bg};color:${tagColor.fg}` },
+    attrs: { style: `background:${tc.bg};color:${tc.fg}` },
   }));
 
   top.appendChild(el('span', { className: 'rc-card__time', textContent: formatDate(confession.created_at) }));
@@ -371,45 +372,10 @@ function initComposeForm() {
   });
 }
 
-// ── Hashtag → color ───────────────────────────────────────────
-// Each tag gets a unique, consistent color derived from its name.
-// Explicit map for the 14 known tags; unknown tags get a deterministic
-// hue from a hash so they're always distinct too.
-
-const HASHTAG_MAP = {
-  '#Confesión':      { h: 260, s: 70 },  // violeta
-  '#Desamor':        { h:   0, s: 80 },  // rojo
-  '#Traición':       { h:  25, s: 85 },  // naranja
-  '#Ruptura':        { h: 330, s: 75 },  // rosa
-  '#Secreto':        { h:  45, s: 90 },  // ámbar
-  '#Familia':        { h: 145, s: 65 },  // verde
-  '#Trabajo':        { h: 215, s: 75 },  // azul
-  '#Amistad':        { h: 175, s: 65 },  // teal
-  '#Vergüenza':      { h: 290, s: 65 },  // púrpura
-  '#Arrepentimiento':{ h:  10, s: 60 },  // rojo suave
-  '#Felicidad':      { h:  52, s: 85 },  // amarillo
-  '#Miedo':          { h: 240, s: 65 },  // índigo
-  '#Sueño':          { h: 275, s: 70 },  // lila
-  '#Enojo':          { h:   4, s: 90 },  // rojo intenso
-  '#Nostalgia':      { h: 200, s: 70 },  // azul cielo
-};
-
-function hashStr(str) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-
-export function hashtagColor(tag) {
-  const entry = HASHTAG_MAP[tag];
-  const h = entry ? entry.h : (hashStr(tag) % 360);
-  const s = entry ? entry.s : 65;
-  // bg: very dark tint (dark theme friendly), fg: vivid pastel
-  return {
-    bg: `hsla(${h},${s}%,60%,0.13)`,
-    fg: `hsl(${h},${Math.min(s + 10, 95)}%,72%)`,
-  };
-}
+// ── Hashtag → color — delegado a shared.js ────────────────────
+export { tagColor };
+// Alias para compatibilidad con chat.js que importa hashtagColor
+export const hashtagColor = tagColor;
 
 // ── Realtime ──────────────────────────────────────────────────
 function startRealtime() {
