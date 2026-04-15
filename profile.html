@@ -97,69 +97,84 @@
   import { getInitials, showToast, formatDate } from './js/utils.js';
   import { Icons }                     from './js/icons.js';
 
-  // ── Guard ────────────────────────────────────────────────
-  const user = await getCurrentUser();
-  if (!user) { window.location.replace('./login.html'); }
+  // ── Boot con guard completo ──────────────────────────────
+  // Module-level userId — set by boot(), used by toggleLike/deleteConfession
+  let _userId = null;
 
-  // ── Cargar perfil + datos iniciales en paralelo ───────────
-  window.__openProfileSheet = () => {};
+  async function boot() {
+    const user = await getCurrentUser();
 
-  const [profile, confResult, cmResult] = await Promise.all([
-    getProfile(user.id),
-    sb.from('confessions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-    sb.from('comments').select('id',    { count: 'exact', head: true }).eq('user_id', user.id),
-  ]);
+    // Sin sesión → login. El return detiene TODO el código que sigue.
+    if (!user) {
+      window.location.replace('./login.html');
+      return;
+    }
 
-  // ── Render inmediato de la info del perfil ────────────────
-  const chipSlot = document.getElementById('header-chip');
-  renderHeaderChip(chipSlot, profile, () => window.location.replace('./login.html'));
-  renderProfile(profile);
+    _userId = user.id;  // make available to toggleLike/deleteConfession
+    window.__openProfileSheet = () => {};
 
-  // Stats básicas — visibles de inmediato
-  document.getElementById('stat-confessions').textContent = confResult.count ?? 0;
-  document.getElementById('stat-comments').textContent    = cmResult.count   ?? 0;
+    // Cargar perfil + conteos en paralelo para render inmediato
+    const [profile, confResult, cmResult] = await Promise.all([
+      getProfile(user.id),
+      sb.from('confessions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      sb.from('comments').select('id',    { count: 'exact', head: true }).eq('user_id', user.id),
+    ]);
 
-  // Likes recibidos — query separada sin bloquear render
-  loadLikesReceived();
+    // Render inmediato
+    const chipSlot = document.getElementById('header-chip');
+    renderHeaderChip(chipSlot, profile, () => window.location.replace('./login.html'));
+    renderProfile(profile);
 
-  // Confesiones propias — sin bloquear el render del hero
-  loadMyConfessions();
+    document.getElementById('stat-confessions').textContent = confResult.count ?? 0;
+    document.getElementById('stat-comments').textContent    = cmResult.count   ?? 0;
 
-  // ── Sign out ──────────────────────────────────────────────
-  document.getElementById('signout-btn').addEventListener('click', async () => {
-    await signOut();
-    window.location.replace('./login.html');
-  });
+    // Sin bloquear el render inicial
+    loadLikesReceived(user.id);
+    loadMyConfessions(user.id, profile);
+
+    // Sign out
+    document.getElementById('signout-btn').addEventListener('click', async () => {
+      await signOut();
+      window.location.replace('./login.html');
+    });
+
+    // Avatar upload
+    initAvatarUpload(user.id, profile, chipSlot);
+  }
+
+  boot();
 
   // ── Avatar upload ─────────────────────────────────────────
-  const avatarInput   = document.getElementById('avatar-input');
-  const progressTrack = document.getElementById('avatar-progress-track');
-  const progressBar   = document.getElementById('avatar-progress');
-  const statusEl      = document.getElementById('avatar-status');
+  function initAvatarUpload(userId, profile, chipSlot) {
+    const avatarInput   = document.getElementById('avatar-input');
+    const progressTrack = document.getElementById('avatar-progress-track');
+    const progressBar   = document.getElementById('avatar-progress');
+    const statusEl      = document.getElementById('avatar-status');
 
-  avatarInput.addEventListener('change', async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    statusEl.textContent = '';
-    progressTrack.hidden = false;
-    progressBar.style.width = '0%';
-    try {
-      const url = await uploadImage(file, (pct) => { progressBar.style.width = pct + '%'; });
-      const { error } = await sb.from('profiles').update({ avatar_url: url }).eq('id', user.id);
-      if (error) throw new Error(error.message);
-      const updatedProfile = { ...profile, avatar_url: url };
-      renderProfile(updatedProfile);
-      renderHeaderChip(chipSlot, updatedProfile, () => window.location.replace('./login.html'));
-      statusEl.textContent = '✓ Foto actualizada';
-      setTimeout(() => { statusEl.textContent = ''; }, 3000);
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      progressTrack.hidden = true;
+    avatarInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      statusEl.textContent = '';
+      progressTrack.hidden = false;
       progressBar.style.width = '0%';
-      avatarInput.value = '';
-    }
-  });
+      try {
+        const url = await uploadImage(file, (pct) => { progressBar.style.width = pct + '%'; });
+        const { error } = await sb.from('profiles').update({ avatar_url: url }).eq('id', userId);
+        if (error) throw new Error(error.message);
+        const updated = { ...profile, avatar_url: url };
+        renderProfile(updated);
+        renderHeaderChip(chipSlot, updated, () => window.location.replace('./login.html'));
+        statusEl.textContent = '✓ Foto actualizada';
+        setTimeout(() => { statusEl.textContent = ''; }, 3000);
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        progressTrack.hidden = true;
+        progressBar.style.width = '0%';
+        avatarInput.value = '';
+      }
+    });
+  }
 
   // ── Funciones ─────────────────────────────────────────────
 
@@ -180,8 +195,8 @@
     }
   }
 
-  async function loadLikesReceived() {
-    const { data: myIds } = await sb.from('confessions').select('id').eq('user_id', user.id);
+  async function loadLikesReceived(userId) {
+    const { data: myIds } = await sb.from('confessions').select('id').eq('user_id', userId);
     if (!myIds?.length) { document.getElementById('stat-likes').textContent = '0'; return; }
     const { count } = await sb.from('likes')
       .select('id', { count: 'exact', head: true })
@@ -189,14 +204,14 @@
     document.getElementById('stat-likes').textContent = count ?? 0;
   }
 
-  async function loadMyConfessions() {
+  async function loadMyConfessions(userId, profile) {
     const profileFeed = document.getElementById('profile-feed');
 
     // Fetch confesiones + likes + comentarios + propios likes en paralelo
     const { data, error } = await sb
       .from('confessions')
       .select('id, user_id, content, image_url, hashtag, created_at')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(50);
 
@@ -218,7 +233,7 @@
     const [{ data: lk }, { data: cm }, { data: myLikes }] = await Promise.all([
       sb.from('likes').select('confession_id').in('confession_id', ids),
       sb.from('comments').select('confession_id').in('confession_id', ids),
-      sb.from('likes').select('confession_id').eq('user_id', user.id).in('confession_id', ids),
+      sb.from('likes').select('confession_id').eq('user_id', userId).in('confession_id', ids),
     ]);
 
     const likeMap    = countMap(lk,      'confession_id');
@@ -339,14 +354,14 @@
       btn.classList.remove('rc-card__action--liked');
       updateIcon(false);
       countSpan.textContent = String(count - 1);
-      await sb.from('likes').delete().match({ confession_id: confessionId, user_id: user.id });
+      await sb.from('likes').delete().match({ confession_id: confessionId, user_id: _userId });
     } else {
       btn.classList.add('rc-card__action--liked');
       updateIcon(true);
       countSpan.textContent = String(count + 1);
       btn.classList.add('rc-card__action--pop');
       btn.addEventListener('animationend', () => btn.classList.remove('rc-card__action--pop'), { once: true });
-      await sb.from('likes').insert({ confession_id: confessionId, user_id: user.id });
+      await sb.from('likes').insert({ confession_id: confessionId, user_id: _userId });
     }
   }
 
