@@ -23,10 +23,9 @@
       </svg>
     </a>
     <h1 class="app-header__title">Mi Perfil</h1>
-    <div id="header-chip" style="width:44px"></div>
+    <div id="header-chip" style="min-width:44px"></div>
   </header>
 
-  <!-- Hero -->
   <div class="profile-hero">
     <div class="profile-avatar-wrap">
       <div class="profile-avatar" id="profile-avatar-display">
@@ -75,7 +74,6 @@
     </div>
   </div>
 
-  <!-- Confesiones -->
   <div class="chat-divider" style="padding:0 16px;margin:0 0 4px">
     <div class="chat-divider__line"></div>
     <span class="chat-divider__label">Mis confesiones</span>
@@ -90,122 +88,148 @@
 
 
 <script type="module">
-  import { sb }                        from './js/api.js';
+  import { sb }                                from './js/api.js';
   import { getCurrentUser, getProfile,
-           signOut, renderHeaderChip } from './js/auth.js';
-  import { uploadImage }               from './js/upload.js';
+           signOut, renderHeaderChip }         from './js/auth.js';
+  import { uploadImage }                       from './js/upload.js';
   import { getInitials, showToast, formatDate } from './js/utils.js';
-  import { Icons }                     from './js/icons.js';
+  import { Icons }                             from './js/icons.js';
 
-  // ── Estado global del módulo ──────────────────────────────
-  let _userId = null;
-  let _userEmail = null;  // ← NUEVO: guardar email aquí
-  let _profile = null;    // ← NUEVO: guardar perfil aquí
+  // ── Hashtag color — HSL único por tag ────────────────────────
+  const HASHTAG_HS = {
+    '#Confesión':      { h: 260, s: 70 }, '#Desamor':         { h:   0, s: 80 },
+    '#Traición':       { h:  25, s: 85 }, '#Ruptura':         { h: 330, s: 75 },
+    '#Secreto':        { h:  45, s: 90 }, '#Familia':         { h: 145, s: 65 },
+    '#Trabajo':        { h: 215, s: 75 }, '#Amistad':         { h: 175, s: 65 },
+    '#Vergüenza':      { h: 290, s: 65 }, '#Arrepentimiento': { h:  10, s: 60 },
+    '#Felicidad':      { h:  52, s: 85 }, '#Miedo':           { h: 240, s: 65 },
+    '#Sueño':          { h: 275, s: 70 }, '#Enojo':           { h:   4, s: 90 },
+    '#Nostalgia':      { h: 200, s: 70 },
+  };
+  function tagColor(tag) {
+    function hashStr(s) {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+      return Math.abs(h);
+    }
+    const e = HASHTAG_HS[tag];
+    const h = e ? e.h : hashStr(tag) % 360;
+    const s = e ? e.s : 65;
+    return {
+      bg: `hsla(${h},${s}%,60%,0.13)`,
+      fg: `hsl(${h},${Math.min(s + 10, 95)}%,72%)`,
+    };
+  }
 
+  // ── Contadores ────────────────────────────────────────────────
+  function countMap(rows, key) {
+    const m = {};
+    rows?.forEach(r => { m[r[key]] = (m[r[key]] || 0) + 1; });
+    return m;
+  }
+
+  // ── Boot (todo el código con acceso a user/profile vive aquí) ─
   async function boot() {
+    // 1. Auth guard — return detiene el script si no hay sesión
     const user = await getCurrentUser();
-
     if (!user) {
       window.location.replace('./login.html');
       return;
     }
 
-    _userId = user.id;
-    _userEmail = user.email;  // ← Guardar email
-
     window.__openProfileSheet = () => {};
 
+    // 2. Carga paralela: perfil + conteos básicos
     const [profile, confResult, cmResult] = await Promise.all([
       getProfile(user.id),
       sb.from('confessions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       sb.from('comments').select('id',    { count: 'exact', head: true }).eq('user_id', user.id),
     ]);
 
-    _profile = profile;  // ← Guardar perfil
-
+    // 3. Render inmediato del hero
     const chipSlot = document.getElementById('header-chip');
     renderHeaderChip(chipSlot, profile, () => window.location.replace('./login.html'));
-    renderProfile(profile);
 
-    document.getElementById('stat-confessions').textContent = confResult.count ?? 0;
-    document.getElementById('stat-comments').textContent    = cmResult.count   ?? 0;
-
-    loadLikesReceived(user.id);
-    loadMyConfessions(user.id, profile);
-
-    document.getElementById('signout-btn').addEventListener('click', async () => {
-      await signOut();
-      window.location.replace('./login.html');
-    });
-
-    initAvatarUpload(user.id, profile, chipSlot);
-  }
-
-  boot();
-
-  // ── Avatar upload ─────────────────────────────────────────
-  function initAvatarUpload(userId, profile, chipSlot) {
-    const avatarInput   = document.getElementById('avatar-input');
-    const progressTrack = document.getElementById('avatar-progress-track');
-    const progressBar   = document.getElementById('avatar-progress');
-    const statusEl      = document.getElementById('avatar-status');
-
-    avatarInput.addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      statusEl.textContent = '';
-      progressTrack.hidden = false;
-      progressBar.style.width = '0%';
-      try {
-        const url = await uploadImage(file, (pct) => { progressBar.style.width = pct + '%'; });
-        const { error } = await sb.from('profiles').update({ avatar_url: url }).eq('id', userId);
-        if (error) throw new Error(error.message);
-        const updated = { ...profile, avatar_url: url };
-        _profile = updated;  // ← Actualizar referencia global
-        renderProfile(updated);
-        renderHeaderChip(chipSlot, updated, () => window.location.replace('./login.html'));
-        statusEl.textContent = '✓ Foto actualizada';
-        setTimeout(() => { statusEl.textContent = ''; }, 3000);
-      } catch (err) {
-        showToast(err.message, 'error');
-      } finally {
-        progressTrack.hidden = true;
-        progressBar.style.width = '0%';
-        avatarInput.value = '';
-      }
-    });
-  }
-
-  // ── Funciones ─────────────────────────────────────────────
-
-  function renderProfile(p) {
-    document.getElementById('profile-name').textContent      = p.full_name;
-    document.getElementById('profile-email').textContent     = _userEmail;  // ← USAR VARIABLE GLOBAL
-    document.getElementById('profile-initials').textContent  = getInitials(p.full_name);
-    document.getElementById('profile-admin-badge').hidden    = !p.is_admin;
+    document.getElementById('profile-name').textContent     = profile.full_name;
+    document.getElementById('profile-email').textContent    = user.email;        // user está en scope ✓
+    document.getElementById('profile-initials').textContent = getInitials(profile.full_name);
+    document.getElementById('profile-admin-badge').hidden   = !profile.is_admin;
 
     const avatarImg = document.getElementById('profile-avatar-img');
-    if (p.avatar_url) {
-      avatarImg.src    = p.avatar_url;
+    if (profile.avatar_url) {
+      avatarImg.src    = profile.avatar_url;
       avatarImg.hidden = false;
       document.getElementById('profile-initials').hidden = true;
     } else {
       avatarImg.hidden = true;
       document.getElementById('profile-initials').hidden = false;
     }
+
+    document.getElementById('stat-confessions').textContent = confResult.count ?? 0;
+    document.getElementById('stat-comments').textContent    = cmResult.count   ?? 0;
+
+    // 4. Queries secundarias sin bloquear el render
+    loadLikesReceived(user.id);
+    loadMyConfessions(user.id, profile);
+
+    // 5. Sign out
+    document.getElementById('signout-btn').addEventListener('click', async () => {
+      await signOut();
+      window.location.replace('./login.html');
+    });
+
+    // 6. Avatar upload
+    const avatarInput   = document.getElementById('avatar-input');
+    const progressTrack = document.getElementById('avatar-progress-track');
+    const progressBar   = document.getElementById('avatar-progress');
+    const statusEl      = document.getElementById('avatar-status');
+    let   currentProfile = profile; // mutable ref para actualizaciones
+
+    avatarInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      statusEl.textContent    = '';
+      progressTrack.hidden    = false;
+      progressBar.style.width = '0%';
+      try {
+        const url = await uploadImage(file, pct => { progressBar.style.width = pct + '%'; });
+        const { error } = await sb.from('profiles').update({ avatar_url: url }).eq('id', user.id);
+        if (error) throw new Error(error.message);
+        currentProfile = { ...currentProfile, avatar_url: url };
+        // Update avatar display
+        avatarImg.src    = url;
+        avatarImg.hidden = false;
+        document.getElementById('profile-initials').hidden = true;
+        renderHeaderChip(chipSlot, currentProfile, () => window.location.replace('./login.html'));
+        statusEl.textContent = '✓ Foto actualizada';
+        setTimeout(() => { statusEl.textContent = ''; }, 3000);
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        progressTrack.hidden    = true;
+        progressBar.style.width = '0%';
+        avatarInput.value       = '';
+      }
+    });
   }
 
+  // ── Likes recibidos ───────────────────────────────────────────
   async function loadLikesReceived(userId) {
     const { data: myIds } = await sb.from('confessions').select('id').eq('user_id', userId);
-    if (!myIds?.length) { document.getElementById('stat-likes').textContent = '0'; return; }
+    if (!myIds?.length) {
+      document.getElementById('stat-likes').textContent = '0';
+      return;
+    }
     const { count } = await sb.from('likes')
       .select('id', { count: 'exact', head: true })
       .in('confession_id', myIds.map(r => r.id));
     document.getElementById('stat-likes').textContent = count ?? 0;
   }
 
+  // ── Confesiones propias ───────────────────────────────────────
   async function loadMyConfessions(userId, profile) {
-    const profileFeed = document.getElementById('profile-feed');
+    const feed = document.getElementById('profile-feed');
+    while (feed.firstChild) feed.removeChild(feed.firstChild);
 
     const { data, error } = await sb
       .from('confessions')
@@ -214,17 +238,13 @@
       .order('created_at', { ascending: false })
       .limit(50);
 
-    if (error) { showToast('Error.', 'error'); return; }
-
-    while (profileFeed.firstChild) profileFeed.removeChild(profileFeed.firstChild);
+    if (error) { showToast('Error al cargar.', 'error'); return; }
 
     if (!data?.length) {
-      profileFeed.appendChild(
-        Object.assign(document.createElement('p'), {
-          className: 'feed-empty',
-          textContent: 'Aún no has publicado ninguna confesión.',
-        })
-      );
+      feed.appendChild(Object.assign(document.createElement('p'), {
+        className:   'feed-empty',
+        textContent: 'Aún no has publicado ninguna confesión.',
+      }));
       return;
     }
 
@@ -239,62 +259,65 @@
     const commentMap = countMap(cm,      'confession_id');
     const likedSet   = new Set(myLikes?.map(r => r.confession_id) || []);
 
-    data.forEach(c => renderConfessionCard(c, likeMap[c.id] || 0, commentMap[c.id] || 0, likedSet.has(c.id)));
+    data.forEach(c => {
+      const card = buildCard(c, likeMap[c.id] || 0, commentMap[c.id] || 0, likedSet.has(c.id), profile, userId);
+      feed.appendChild(card);
+    });
   }
 
-  function countMap(rows, key) {
-    const m = {};
-    rows?.forEach(r => { m[r[key]] = (m[r[key]] || 0) + 1; });
-    return m;
-  }
-
-  function renderConfessionCard(c, likeCount, commentCount, isLiked) {
-    const { hashtagColor } = getHashtagColor(c.hashtag || '#Confesión');
+  // ── Construir tarjeta ─────────────────────────────────────────
+  function buildCard(c, likeCount, commentCount, isLiked, profile, userId) {
     const card = document.createElement('article');
     card.className = 'rc-card';
-    card.setAttribute('id', `pcard-${c.id}`);
 
+    // — Top row —
     const top = document.createElement('div');
     top.className = 'rc-card__top';
 
+    // Avatar
     const av = document.createElement('div');
     av.className = 'rc-card__avatar';
-    if (_profile?.avatar_url) {  // ← USAR _profile global
+    if (profile?.avatar_url) {
       const img = document.createElement('img');
-      img.src = _profile.avatar_url; img.alt = 'Avatar';
+      img.src = profile.avatar_url; img.alt = 'Avatar'; img.loading = 'lazy';
       av.appendChild(img);
     } else {
       av.appendChild(Icons.user(14));
     }
     top.appendChild(av);
 
-    const { bg, fg } = hashtagColor;
-    const tag = document.createElement('span');
-    tag.className = 'rc-card__tag';
-    tag.textContent = c.hashtag || '#Confesión';
-    tag.style.cssText = `background:${bg};color:${fg}`;
-    top.appendChild(tag);
+    // Hashtag pill con color único
+    const tc  = tagColor(c.hashtag || '#Confesión');
+    const pill = document.createElement('span');
+    pill.className = 'rc-card__tag';
+    pill.textContent = c.hashtag || '#Confesión';
+    pill.style.background = tc.bg;
+    pill.style.color      = tc.fg;
+    top.appendChild(pill);
 
+    // Tiempo
     const time = document.createElement('span');
-    time.className = 'rc-card__time';
+    time.className   = 'rc-card__time';
     time.textContent = formatDate(c.created_at);
     top.appendChild(time);
 
-    const delBtn = document.createElement('button');
-    delBtn.className = 'rc-card__del';
-    delBtn.type = 'button';
-    delBtn.setAttribute('aria-label', 'Borrar');
-    delBtn.appendChild(Icons.trash(15));
-    delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteConfession(c.id, card); });
-    top.appendChild(delBtn);
+    // Borrar
+    const del = document.createElement('button');
+    del.className = 'rc-card__del';
+    del.type = 'button';
+    del.setAttribute('aria-label', 'Borrar');
+    del.appendChild(Icons.trash(15));
+    del.addEventListener('click', e => { e.stopPropagation(); deleteCard(c.id, card, userId); });
+    top.appendChild(del);
 
     card.appendChild(top);
 
+    // — Body row —
     const body = document.createElement('div');
     body.className = 'rc-card__body-row';
 
     const text = document.createElement('p');
-    text.className = 'rc-card__text';
+    text.className   = 'rc-card__text';
     text.textContent = c.content;
     body.appendChild(text);
 
@@ -303,64 +326,73 @@
       thumb.className = 'rc-card__thumb';
       const img = document.createElement('img');
       img.src = c.image_url; img.alt = 'Imagen'; img.loading = 'lazy';
-      img.addEventListener('click', (e) => { e.stopPropagation(); openImageModal(c.image_url); });
+      img.addEventListener('click', e => { e.stopPropagation(); openImageModal(c.image_url); });
       thumb.appendChild(img);
       body.appendChild(thumb);
     }
     card.appendChild(body);
 
+    // — Footer —
     const footer = document.createElement('div');
     footer.className = 'rc-card__footer';
 
+    // Like
     const likeBtn = document.createElement('button');
     likeBtn.className = `rc-card__action${isLiked ? ' rc-card__action--liked' : ''}`;
     likeBtn.type = 'button';
     likeBtn.appendChild(Icons.heart(isLiked, 17));
-    likeBtn.appendChild(Object.assign(document.createElement('span'), {
-      className: 'rc-card__action-count', textContent: String(likeCount),
-    }));
-    likeBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleLike(c.id, likeBtn); });
+    const likeCount$ = document.createElement('span');
+    likeCount$.className   = 'rc-card__action-count';
+    likeCount$.textContent = String(likeCount);
+    likeBtn.appendChild(likeCount$);
+    likeBtn.addEventListener('click', e => { e.stopPropagation(); toggleLike(c.id, likeBtn, userId); });
     footer.appendChild(likeBtn);
 
+    // Comment count
     const cmBtn = document.createElement('button');
     cmBtn.className = 'rc-card__action';
     cmBtn.type = 'button';
     cmBtn.appendChild(Icons.chat(17));
-    cmBtn.appendChild(Object.assign(document.createElement('span'), {
-      className: 'rc-card__action-count', textContent: String(commentCount),
-    }));
+    const cmCount$ = document.createElement('span');
+    cmCount$.className   = 'rc-card__action-count';
+    cmCount$.textContent = String(commentCount);
+    cmBtn.appendChild(cmCount$);
     footer.appendChild(cmBtn);
-    card.appendChild(footer);
 
-    document.getElementById('profile-feed').appendChild(card);
+    card.appendChild(footer);
+    return card;
   }
 
-  async function toggleLike(confessionId, btn) {
+  // ── Like toggle ───────────────────────────────────────────────
+  async function toggleLike(confessionId, btn, userId) {
     const isLiked   = btn.classList.contains('rc-card__action--liked');
     const countSpan = btn.querySelector('.rc-card__action-count');
     const count     = parseInt(countSpan.textContent) || 0;
-    const updateIcon = (filled) => {
+
+    const swapIcon = filled => {
       const old = btn.querySelector('svg');
       if (old) btn.replaceChild(Icons.heart(filled, 17), old);
     };
+
     if (isLiked) {
       btn.classList.remove('rc-card__action--liked');
-      updateIcon(false);
+      swapIcon(false);
       countSpan.textContent = String(count - 1);
-      await sb.from('likes').delete().match({ confession_id: confessionId, user_id: _userId });
+      await sb.from('likes').delete().match({ confession_id: confessionId, user_id: userId });
     } else {
       btn.classList.add('rc-card__action--liked');
-      updateIcon(true);
+      swapIcon(true);
       countSpan.textContent = String(count + 1);
       btn.classList.add('rc-card__action--pop');
       btn.addEventListener('animationend', () => btn.classList.remove('rc-card__action--pop'), { once: true });
-      await sb.from('likes').insert({ confession_id: confessionId, user_id: _userId });
+      await sb.from('likes').insert({ confession_id: confessionId, user_id: userId });
     }
   }
 
-  async function deleteConfession(id, cardEl) {
+  // ── Borrar confesión ──────────────────────────────────────────
+  async function deleteCard(id, cardEl, userId) {
     if (!confirm('¿Borrar esta confesión? No se puede deshacer.')) return;
-    const { error } = await sb.from('confessions').delete().eq('id', id);
+    const { error } = await sb.from('confessions').delete().eq('id', id).eq('user_id', userId);
     if (error) { showToast(error.message, 'error'); return; }
     cardEl.remove();
     const stat = document.getElementById('stat-confessions');
@@ -368,52 +400,30 @@
     showToast('Confesión eliminada.', 'success');
   }
 
+  // ── Modal imagen ──────────────────────────────────────────────
   function openImageModal(url) {
-    const existing = document.getElementById('img-modal');
-    if (existing) existing.remove();
+    document.getElementById('img-modal')?.remove();
     const overlay = document.createElement('div');
-    overlay.className = 'img-modal';
     overlay.id = 'img-modal';
+    overlay.className = 'img-modal';
     const img = document.createElement('img');
-    img.src = url; img.alt = 'Imagen completa'; img.className = 'img-modal__img';
+    img.src = url; img.alt = 'Imagen'; img.className = 'img-modal__img';
     const closeBtn = document.createElement('button');
     closeBtn.className = 'img-modal__close';
     closeBtn.type = 'button';
     closeBtn.appendChild(Icons.close(20));
     const close = () => overlay.remove();
     closeBtn.addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-    document.addEventListener('keydown', () => { if (e.key === 'Escape') close(); }, { once: true });
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); }, { once: true });
     overlay.appendChild(closeBtn);
     overlay.appendChild(img);
     document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add('img-modal--open'));
   }
 
-  const HASHTAG_HS = {
-    '#Confesión':      { h: 260, s: 70 }, '#Desamor':        { h:   0, s: 80 },
-    '#Traición':       { h:  25, s: 85 }, '#Ruptura':        { h: 330, s: 75 },
-    '#Secreto':        { h:  45, s: 90 }, '#Familia':        { h: 145, s: 65 },
-    '#Trabajo':        { h: 215, s: 75 }, '#Amistad':        { h: 175, s: 65 },
-    '#Vergüenza':      { h: 290, s: 65 }, '#Arrepentimiento':{ h:  10, s: 60 },
-    '#Felicidad':      { h:  52, s: 85 }, '#Miedo':          { h: 240, s: 65 },
-    '#Sueño':          { h: 275, s: 70 }, '#Enojo':          { h:   4, s: 90 },
-    '#Nostalgia':      { h: 200, s: 70 },
-  };
-  function hashStr(str) {
-    let h = 0;
-    for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
-    return Math.abs(h);
-  }
-  function getHashtagColor(tag) {
-    const e = HASHTAG_HS[tag];
-    const h = e ? e.h : (hashStr(tag) % 360);
-    const s = e ? e.s : 65;
-    return { hashtagColor: {
-      bg: `hsla(${h},${s}%,60%,0.13)`,
-      fg: `hsl(${h},${Math.min(s+10,95)}%,72%)`,
-    }};
-  }
+  // ── Arrancar ──────────────────────────────────────────────────
+  boot();
 </script>
 
 </body>
