@@ -8,6 +8,7 @@ import { getCurrentUser, getProfile }            from './auth.js';
 import { el, formatDate, showToast, getInitials } from './utils.js';
 import { Icons }                                 from './icons.js';
 import { hashtagColor, canDelete as feedCanDelete } from './feed.js';
+import { toggleSaveThread }                          from './hilos.js';
 
 let currentUser      = null;
 let currentProfile   = null;
@@ -48,8 +49,55 @@ export async function openChat(confession) {
   chatInputBar.hidden       = !currentUser;
   commentLoginPrompt.hidden = !!currentUser;
 
+  // Botón guardar hilo
+  renderSaveButton(confession.id);
+
   await loadComments(confession.id);
   startCommentRealtime(confession.id);
+}
+
+// ── Botón guardar hilo ────────────────────────────────────────
+async function renderSaveButton(confessionId) {
+  const slot = document.getElementById('chat-save-slot');
+  if (!slot) return;
+  while (slot.firstChild) slot.removeChild(slot.firstChild);
+  if (!currentUser) return;
+
+  // Verificar si ya está guardado
+  const { data } = await sb
+    .from('saved_threads')
+    .select('id')
+    .match({ user_id: currentUser.id, confession_id: confessionId })
+    .maybeSingle();
+
+  const isSaved = !!data;
+
+  const btn = document.createElement('button');
+  btn.className = `chat-save-btn${isSaved ? ' chat-save--saved' : ''}`;
+  btn.type = 'button';
+  btn.setAttribute('aria-label', isSaved ? 'Guardado' : 'Guardar hilo');
+  btn.title = isSaved ? 'Guardado — toca para quitar' : 'Guardar hilo';
+
+  // Bookmark SVG
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', '18'); svg.setAttribute('height', '18');
+  svg.setAttribute('fill', isSaved ? 'currentColor' : 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.5');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('stroke-linecap', 'round');
+  path.setAttribute('stroke-linejoin', 'round');
+  path.setAttribute('d', 'M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z');
+  svg.appendChild(path);
+  btn.appendChild(svg);
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    toggleSaveThread(confessionId, btn);
+  });
+
+  slot.appendChild(btn);
 }
 
 export function closeChat() {
