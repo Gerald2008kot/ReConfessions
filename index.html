@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -8,6 +8,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" />
   <link rel="stylesheet" href="css/app.css" />
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -19,54 +20,61 @@
 ════════════════════════════════════════════════════════════════ -->
 <div id="view-feed" class="view active">
 
-  <!-- Header fijo -->
   <header class="app-header">
-    <h1 class="app-header__title">Feed</h1>
+    <!-- Logo / recarga -->
+    <button id="logo-btn" class="app-header__logo-btn" type="button" aria-label="ReConfessions — recargar feed">
+      Re-Confessions
+    </button>
 
-    <!-- Chip de sesión -->
-    <div id="header-chip"></div>
+    <!-- Acciones del header -->
+    <div class="app-header__actions">
+      <!-- Hilos guardados (solo autenticados) -->
+      <button id="hilos-btn" class="app-header__icon-btn" type="button" aria-label="Hilos guardados" hidden>
+        <!-- Bell / bookmark icon -->
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/>
+        </svg>
+        <span id="hilos-badge" class="header-badge" hidden>0</span>
+      </button>
+
+      <!-- Modo claro/oscuro -->
+      <button id="theme-btn" class="app-header__icon-btn" type="button" aria-label="Cambiar tema">
+        <!-- Moon icon (dark mode active) -->
+        <svg id="theme-icon-dark" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/>
+        </svg>
+        <!-- Sun icon (light mode active) -->
+        <svg id="theme-icon-light" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" hidden>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/>
+        </svg>
+      </button>
+
+      <!-- Chip de sesión -->
+      <div id="header-chip"></div>
+    </div>
   </header>
 
-  <!-- Lista de confesiones -->
   <main id="feed" class="feed-scroll" aria-label="Feed de confesiones" aria-live="polite">
     <p class="feed-empty">Cargando confesiones…</p>
   </main>
 
   <!-- Barra de compose (autenticados) -->
   <div id="compose-bar" class="compose-bar" hidden>
-    <!-- Fila superior: hashtag selector -->
     <div class="compose-bar__top">
-      <select id="compose-hashtag" class="compose-hashtag-select" aria-label="Elige un hashtag">
-        <!-- Poblado por feed.js -->
-      </select>
-      <!-- Botón imagen -->
+      <select id="compose-hashtag" class="compose-hashtag-select" aria-label="Elige un hashtag"></select>
       <label class="compose-img-btn" for="compose-img-input" title="Adjuntar imagen" aria-label="Adjuntar imagen">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
         </svg>
       </label>
-      <input type="file" id="compose-img-input" class="uploader__input"
-        accept="image/jpeg,image/png,image/gif,image/webp" />
+      <input type="file" id="compose-img-input" class="uploader__input" accept="image/jpeg,image/png,image/gif,image/webp" />
     </div>
-
-    <!-- Preview imagen -->
     <div id="compose-img-preview" class="compose-img-preview" hidden></div>
-
-    <!-- Progress bar -->
     <div class="uploader__progress-track" hidden>
       <div id="compose-progress" class="uploader__progress-bar"></div>
     </div>
-
-    <!-- Fila de input + enviar -->
     <div class="compose-bar__input-row">
-      <textarea
-        id="compose-input"
-        class="compose-textarea"
-        placeholder="Confiesa algo…"
-        maxlength="2000"
-        rows="2"
-        aria-label="Escribe tu confesión"
-      ></textarea>
+      <textarea id="compose-input" class="compose-textarea" placeholder="Confiesa algo…" maxlength="2000" rows="2" aria-label="Escribe tu confesión"></textarea>
       <button id="compose-send-btn" class="compose-send-btn" type="button" aria-label="Publicar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/>
@@ -75,109 +83,143 @@
     </div>
   </div>
 
-  <!-- Prompt de login (invitados / no autenticados) -->
   <div id="login-prompt-bar" class="login-prompt-bar" hidden>
     <a href="login.html" class="login-prompt-bar__link">
       Inicia sesión para confesar
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px">
         <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
       </svg>
     </a>
   </div>
-
-</div><!-- /#view-feed -->
+</div>
 
 
 <!-- ═══════════════════════════════════════════════════════════
-     VISTA: CHAT (Hilo de comentarios)
+     VISTA: CHAT (Hilo)
 ════════════════════════════════════════════════════════════════ -->
 <div id="view-chat" class="view">
-
-  <!-- Header del hilo -->
   <header class="app-header">
     <button id="chat-back-btn" class="app-header__back" type="button" aria-label="Volver">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
       </svg>
     </button>
     <h2 class="app-header__title">Hilo</h2>
+    <!-- Botón guardar hilo -->
+    <div id="chat-save-slot" style="display:flex;align-items:center;min-width:44px;justify-content:flex-end"></div>
   </header>
 
   <div class="chat-scroll">
-    <!-- Slot de la confesión (renderizado por chat.js con estructura rc-card) -->
     <div id="chat-confession-slot" class="chat-confession-slot"></div>
-
-    <!-- Separador -->
     <div class="chat-divider">
       <div class="chat-divider__line"></div>
       <span class="chat-divider__label">Comentarios</span>
       <div class="chat-divider__line"></div>
     </div>
-
-    <!-- Lista de burbujas -->
-    <div id="chat-comment-list" class="chat-comment-list" role="log" aria-live="polite">
-    </div>
+    <div id="chat-comment-list" class="chat-comment-list" role="log" aria-live="polite"></div>
   </div>
 
-  <!-- Barra de input (autenticados) -->
   <div id="chat-input-bar" class="chat-input-bar" hidden>
-    <input
-      id="chat-comment-input"
-      class="chat-input"
-      type="text"
-      placeholder="Escribe un consejo…"
-      maxlength="500"
-      aria-label="Tu comentario"
-    />
-    <button id="chat-comment-submit" class="chat-send-btn" type="button" aria-label="Enviar">
-      Enviar
-    </button>
+    <input id="chat-comment-input" class="chat-input" type="text" placeholder="Escribe un consejo…" maxlength="500" aria-label="Tu comentario" />
+    <button id="chat-comment-submit" class="chat-send-btn" type="button" aria-label="Enviar">Enviar</button>
   </div>
-
-  <!-- Prompt de login en el hilo -->
   <div id="chat-login-prompt" class="chat-login-prompt" hidden>
     <a href="login.html">Inicia sesión</a> para unirte a la conversación.
   </div>
-
-</div><!-- /#view-chat -->
+</div>
 
 
 <!-- ═══════════════════════════════════════════════════════════
-     BOTTOM SHEET: Perfil de usuario
+     VISTA: HILOS GUARDADOS
 ════════════════════════════════════════════════════════════════ -->
-<div id="profile-overlay" class="profile-overlay"></div>
+<div id="view-hilos" class="view" hidden>
+  <header class="app-header">
+    <button id="hilos-back-btn" class="app-header__back" type="button" aria-label="Volver">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
+      </svg>
+    </button>
+    <h2 class="app-header__title">Hilos Guardados</h2>
+    <div style="min-width:44px"></div>
+  </header>
+  <div id="hilos-list" class="hilos-list">
+    <p class="feed-empty">Cargando…</p>
+  </div>
+</div>
 
-<div id="profile-sheet" class="profile-sheet">
-  <div id="profile-sheet-handle" class="profile-sheet__handle"></div>
 
-  <div class="profile-sheet__body">
-    <div class="profile-sheet__user">
-      <div id="sheet-avatar" class="profile-sheet__avatar"></div>
-      <div>
-        <p id="sheet-name"  class="profile-sheet__name"></p>
-        <p id="sheet-email" class="profile-sheet__email"></p>
+<!-- ═══════════════════════════════════════════════════════════
+     VISTA: MI PERFIL
+════════════════════════════════════════════════════════════════ -->
+<div id="view-perfil" class="view" hidden>
+  <header class="app-header">
+    <button id="perfil-back-btn" class="app-header__back" type="button" aria-label="Volver">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
+      </svg>
+    </button>
+    <h2 class="app-header__title">Mi Perfil</h2>
+    <div style="min-width:44px"></div>
+  </header>
+
+  <div style="overflow-y:auto;flex:1;scrollbar-width:none;">
+
+    <div class="profile-hero">
+      <div class="profile-avatar-wrap">
+        <div class="profile-avatar">
+          <span id="perfil-initials" class="profile-avatar__initials"></span>
+          <img id="perfil-avatar-img" class="profile-avatar__img" alt="Foto de perfil" hidden />
+        </div>
+        <label class="profile-avatar__edit-btn" for="perfil-avatar-input" aria-label="Cambiar foto">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/>
+          </svg>
+        </label>
+        <input type="file" id="perfil-avatar-input" class="uploader__input" accept="image/jpeg,image/png,image/gif,image/webp" />
+      </div>
+
+      <h2 id="perfil-name"  class="profile-name"></h2>
+      <p  id="perfil-email" class="profile-email"></p>
+      <span id="perfil-admin-badge" class="profile-admin-badge" hidden>Admin</span>
+
+      <div class="uploader__progress-track" id="perfil-avatar-track" hidden style="width:180px;margin:10px auto 0">
+        <div id="perfil-avatar-bar" class="uploader__progress-bar"></div>
+      </div>
+      <p id="perfil-avatar-status" class="profile-status"></p>
+
+      <div class="profile-stats">
+        <div class="profile-stat">
+          <span id="perfil-stat-conf"  class="profile-stat__value">—</span>
+          <span class="profile-stat__label">Confesiones</span>
+        </div>
+        <div class="profile-stat">
+          <span id="perfil-stat-cm"    class="profile-stat__value">—</span>
+          <span class="profile-stat__label">Respuestas</span>
+        </div>
+        <div class="profile-stat">
+          <span id="perfil-stat-likes" class="profile-stat__value">—</span>
+          <span class="profile-stat__label">Likes</span>
+        </div>
+      </div>
+
+      <div class="profile-actions">
+        <button id="perfil-signout-btn" class="profile-signout-btn" type="button">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/>
+          </svg>
+          Cerrar Sesión
+        </button>
       </div>
     </div>
 
-    <div class="profile-sheet__actions">
-      <a href="profile.html" class="profile-sheet__item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
-        </svg>
-        <span>Mi Perfil y Foto</span>
-      </a>
-      <!-- Solo visible para admins — controlado por JS -->
-      <button id="sheet-admin" class="profile-sheet__item profile-sheet__item--btn" type="button" hidden>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
-          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-        </svg>
-        <span>Administración</span>
-        <span class="profile-sheet__item-badge">Admin</span>
-      </button>
-      <button id="sheet-signout" class="profile-sheet__signout" type="button">
-        Cerrar Sesión
-      </button>
+    <div class="chat-divider" style="padding:0 16px;margin:0 0 4px">
+      <div class="chat-divider__line"></div>
+      <span class="chat-divider__label">Mis confesiones</span>
+      <div class="chat-divider__line"></div>
+    </div>
+
+    <div id="perfil-feed" class="feed-scroll" style="flex:none;overflow-y:visible;padding-bottom:40px;gap:8px">
+      <p class="feed-empty">Cargando…</p>
     </div>
   </div>
 </div>
@@ -187,7 +229,6 @@
      VISTA: ADMINISTRACIÓN
 ════════════════════════════════════════════════════════════════ -->
 <div id="view-admin" class="view" hidden>
-
   <header class="app-header">
     <button id="admin-back-btn" class="app-header__back" type="button" aria-label="Volver">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -195,149 +236,217 @@
       </svg>
     </button>
     <h2 class="app-header__title">Administración</h2>
-    <div style="width:38px"></div>
+    <div style="min-width:38px"></div>
   </header>
 
-  <!-- Tabs -->
   <div class="admin-tabs">
     <button id="admin-tab-users"  class="admin-tab active" type="button">Usuarios</button>
     <button id="admin-tab-create" class="admin-tab"        type="button">Crear Usuario</button>
   </div>
 
-  <!-- Panel: Usuarios -->
   <div id="admin-panel-users" class="admin-panel active">
     <div id="admin-user-list" class="admin-user-list">
       <p class="admin-loading">Cargando…</p>
     </div>
   </div>
 
-  <!-- Panel: Crear Usuario -->
   <div id="admin-panel-create" class="admin-panel">
     <form id="admin-create-form" class="admin-create-form" novalidate>
-
       <div class="admin-field">
         <label for="admin-create-name">Nombre completo</label>
-        <input type="text" id="admin-create-name" class="admin-input"
-          placeholder="Nombre del usuario" maxlength="80" required />
+        <input type="text" id="admin-create-name" class="admin-input" placeholder="Nombre del usuario" maxlength="80" />
       </div>
-
       <div class="admin-field">
         <label for="admin-create-email">Correo electrónico</label>
-        <input type="email" id="admin-create-email" class="admin-input"
-          placeholder="correo@ejemplo.com" required />
+        <input type="email" id="admin-create-email" class="admin-input" placeholder="correo@ejemplo.com" />
       </div>
-
       <div class="admin-field">
         <label for="admin-create-password">Contraseña temporal</label>
-        <input type="password" id="admin-create-password" class="admin-input"
-          placeholder="Mínimo 8 caracteres" minlength="8" required />
+        <input type="password" id="admin-create-password" class="admin-input" placeholder="Mínimo 8 caracteres" />
       </div>
-
       <div class="admin-checkbox-row">
         <input type="checkbox" id="admin-create-is-admin" />
         <label for="admin-create-is-admin">Dar permisos de administrador</label>
       </div>
-
       <p id="admin-create-error" class="admin-error" role="alert"></p>
-
       <button type="submit" class="admin-submit-btn">Crear Usuario</button>
     </form>
   </div>
-
 </div>
 
 
-<!-- ── Scripts ──────────────────────────────────────────────── -->
+<!-- ═══════════════════════════════════════════════════════════
+     BOTTOM SHEET: Opciones de usuario
+════════════════════════════════════════════════════════════════ -->
+<div id="profile-overlay" class="profile-overlay"></div>
+
+<div id="profile-sheet" class="profile-sheet">
+  <div id="profile-sheet-handle" class="profile-sheet__handle"></div>
+  <div class="profile-sheet__body">
+    <div class="profile-sheet__user">
+      <div id="sheet-avatar" class="profile-sheet__avatar"></div>
+      <div>
+        <p id="sheet-name"  class="profile-sheet__name"></p>
+        <p id="sheet-email" class="profile-sheet__email"></p>
+      </div>
+    </div>
+    <div class="profile-sheet__actions">
+      <button id="sheet-perfil" class="profile-sheet__item profile-sheet__item--btn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:20px;height:20px">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
+        </svg>
+        <span>Mi Perfil y Foto</span>
+      </button>
+      <button id="sheet-admin" class="profile-sheet__item profile-sheet__item--btn" type="button" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:20px;height:20px">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        <span>Administración</span>
+        <span class="profile-sheet__item-badge">Admin</span>
+      </button>
+      <button id="sheet-signout" class="profile-sheet__signout" type="button">Cerrar Sesión</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Scripts ────────────────────────────────────────────────── -->
 <script type="module">
-  import { initFeed }                            from './js/feed.js';
+  import { initFeed, switchView }                from './js/feed.js';
   import { getCurrentUser, getProfile,
            renderHeaderChip, onAuthStateChange,
            signOut }                             from './js/auth.js';
   import { getInitials }                         from './js/utils.js';
-  import { initAdmin, openAdmin, closeAdmin }    from './js/admin.js';
+  import { initAdmin, openAdmin }                from './js/admin.js';
+  import { initPerfil, openPerfil }              from './js/perfil.js';
+  import { initHilos, openHilos,
+           updateHilosCount }                    from './js/hilos.js';
 
   const isGuest = sessionStorage.getItem('rc_guest') === '1';
 
-  onAuthStateChange((event) => {
-    if (event === 'SIGNED_OUT' && !isGuest) window.location.replace('./login.html');
+  // ── Tema claro/oscuro ───────────────────────────────────────
+  const savedTheme = localStorage.getItem('rc_theme') || 'dark';
+  applyTheme(savedTheme);
+
+  document.getElementById('theme-btn').addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme');
+    applyTheme(current === 'dark' ? 'light' : 'dark');
   });
 
-  // Definir ANTES de boot para que esté disponible cuando renderHeaderChip lo busque
-  window.__openProfileSheet = function() {
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('rc_theme', theme);
+    document.getElementById('theme-icon-dark').hidden  = theme === 'light';
+    document.getElementById('theme-icon-light').hidden = theme === 'dark';
+  }
+
+  // ── Sheet helpers ───────────────────────────────────────────
+  window.__openProfileSheet  = () => {
     document.getElementById('profile-sheet')?.classList.add('open');
     document.getElementById('profile-overlay')?.classList.add('open');
   };
-  window.__closeProfileSheet = function() {
+  window.__closeProfileSheet = () => {
     document.getElementById('profile-sheet')?.classList.remove('open');
     document.getElementById('profile-overlay')?.classList.remove('open');
   };
 
+  // ── Auth state ──────────────────────────────────────────────
+  onAuthStateChange(event => {
+    if (event === 'SIGNED_OUT' && !isGuest) window.location.replace('./login.html');
+  });
+
+  // ── Back button (popstate) ──────────────────────────────────
+  window.addEventListener('popstate', () => {
+    // Cerrar el sheet si está abierto
+    if (document.getElementById('profile-sheet')?.classList.contains('open')) {
+      window.__closeProfileSheet();
+      return;
+    }
+    // Las vistas manejan su propio botón de atrás vía switchView
+  });
+
+  // ── Logo: recargar el feed ──────────────────────────────────
+  document.getElementById('logo-btn').addEventListener('click', () => {
+    window.location.reload();
+  });
+
+  // ── Boot ────────────────────────────────────────────────────
   async function boot() {
     const user = await getCurrentUser();
     if (!user && !isGuest) { window.location.replace('./login.html'); return; }
 
-    // Chip
     const chipSlot = document.getElementById('header-chip');
     const profile  = user ? await getProfile(user.id) : null;
-    renderHeaderChip(chipSlot, profile, openProfileSheet);
 
-    // Bottom sheet de perfil
+    renderHeaderChip(chipSlot, profile, window.__openProfileSheet);
+
+    // Sheet: datos del usuario
     if (user && profile) {
-      const sheetName   = document.getElementById('sheet-name');
-      const sheetEmail  = document.getElementById('sheet-email');
-      const sheetAvatar = document.getElementById('sheet-avatar');
+      document.getElementById('sheet-name').textContent  = profile.full_name;
+      document.getElementById('sheet-email').textContent = user.email;
 
-      if (sheetName)  sheetName.textContent  = profile.full_name;
-      if (sheetEmail) sheetEmail.textContent  = user.email;
-
-      if (sheetAvatar) {
-        if (profile.avatar_url) {
-          const img = document.createElement('img');
-          img.src = profile.avatar_url;
-          img.alt = 'Avatar';
-          img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
-          sheetAvatar.appendChild(img);
-        } else {
-          sheetAvatar.textContent = getInitials(profile.full_name);
-        }
+      const sheetAv = document.getElementById('sheet-avatar');
+      if (profile.avatar_url) {
+        const img = document.createElement('img');
+        img.src = profile.avatar_url; img.alt = 'Avatar';
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+        sheetAv.appendChild(img);
+      } else {
+        sheetAv.textContent = getInitials(profile.full_name);
       }
     }
 
-    // Sign out desde el sheet
+    // Sheet: cerrar
+    document.getElementById('profile-sheet-handle')?.addEventListener('click', window.__closeProfileSheet);
+    document.getElementById('profile-overlay')?.addEventListener('click', window.__closeProfileSheet);
+
+    // Sheet: botón Mi Perfil
+    document.getElementById('sheet-perfil')?.addEventListener('click', () => {
+      window.__closeProfileSheet();
+      openPerfil();
+    });
+
+    // Sheet: botón Admin (solo admins)
+    if (profile?.is_admin) {
+      const adminBtn = document.getElementById('sheet-admin');
+      adminBtn.hidden = false;
+      adminBtn.addEventListener('click', () => { window.__closeProfileSheet(); openAdmin(); });
+    }
+
+    // Sheet: cerrar sesión
     document.getElementById('sheet-signout')?.addEventListener('click', async () => {
       sessionStorage.removeItem('rc_guest');
       await signOut();
       window.location.replace('./login.html');
     });
 
-    // Handle del sheet
-    document.getElementById('profile-sheet-handle')?.addEventListener('click', () => window.__closeProfileSheet());
-    document.getElementById('profile-overlay')?.addEventListener('click', () => window.__closeProfileSheet());
-
-    // Mostrar botón de admin si corresponde
-    if (profile?.is_admin) {
-      const adminBtn = document.getElementById('sheet-admin');
-      if (adminBtn) {
-        adminBtn.hidden = false;
-        adminBtn.addEventListener('click', () => {
-          window.__closeProfileSheet();
-          openAdmin();
-        });
-      }
+    // Hilos guardados
+    if (user) {
+      document.getElementById('hilos-btn').hidden = false;
+      document.getElementById('hilos-btn').addEventListener('click', openHilos);
+      await initHilos(user, () => switchView('feed', false), async confession => {
+        switchView('chat');
+        const { openChat } = await import('./js/chat.js');
+        await openChat(confession);
+      });
+      updateHilosCount();
     }
 
-    // initAdmin y initFeed en paralelo — no bloquear el feed
+    // Perfil SPA
+    if (user && profile) {
+      await initPerfil(user, profile, chipSlot, () => switchView('feed', false));
+    }
+
+    // Admin
     initAdmin(() => {
-      document.getElementById('view-admin')?.classList.remove('active');
+      document.getElementById('view-admin').classList.remove('active');
       document.getElementById('view-admin').hidden = true;
-      document.getElementById('view-feed')?.classList.add('active');
+      document.getElementById('view-feed').classList.add('active');
     });
 
     await initFeed();
   }
-
-  function openProfileSheet()  { window.__openProfileSheet(); }
-  function closeProfileSheet() { window.__closeProfileSheet(); }
 
   boot();
 </script>
