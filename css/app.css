@@ -1199,3 +1199,223 @@ img { display: block; max-width: 100%; }
   color: var(--accent-amber);
   border: 1px solid rgba(232,168,56,0.25);
 }
+
+/* ════════════════════════════════════════════════════════════
+   MODO CLARO — sobreescribe variables en [data-theme="light"]
+════════════════════════════════════════════════════════════ */
+[data-theme="light"] {
+  --bg:            #f5f4f8;
+  --bg-card:       #ffffff;
+  --bg-elevated:   #efefef;
+  --border:        rgba(0,0,0,0.08);
+  --border-soft:   rgba(0,0,0,0.05);
+  --border-active: rgba(107,79,216,0.4);
+
+  --text:          #18161f;
+  --text-2:        #4a4560;
+  --text-3:        #9891b0;
+
+  --accent:        #6b4fd8;
+  --accent-dim:    rgba(107,79,216,0.12);
+  --accent-glow:   rgba(107,79,216,0.1);
+  --accent-amber:  #b47a10;
+  --accent-rose:   #c0394a;
+  --danger:        #c0394a;
+}
+
+[data-theme="light"] body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+[data-theme="light"] .app-header {
+  background: rgba(245,244,248,0.88);
+}
+
+[data-theme="light"] .compose-bar,
+[data-theme="light"] .chat-input-bar,
+[data-theme="light"] .login-prompt-bar,
+[data-theme="light"] .chat-login-prompt {
+  background: rgba(245,244,248,0.92);
+}
+
+[data-theme="light"] .profile-sheet,
+[data-theme="light"] .profile-overlay { background: rgba(245,244,248,0.95); }
+
+[data-theme="light"] .profile-sheet {
+  background: var(--bg-card);
+  border-color: var(--border);
+}
+
+[data-theme="light"] .chat-bubble {
+  background: #e8e5f0;
+  border-color: transparent;
+}
+
+[data-theme="light"] .rc-card__text { color: var(--text); }
+
+[data-theme="light"] .chat-avatar-sm {
+  background: #ddd8f0;
+  color: var(--text-3);
+}
+
+/* ── Header logo button ───────────────────────────────────── */
+.app-header__logo-btn {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.1rem;
+  font-style: italic;
+  font-weight: 700;
+  color: var(--text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  letter-spacing: -0.01em;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+.app-header__logo-btn:active { opacity: 0.7; }
+
+.app-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-header__icon-btn {
+  position: relative;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+.app-header__icon-btn:active { background: var(--bg-card); }
+
+/* Badge de notificaciones en el header */
+.header-badge {
+  position: absolute;
+  top: -3px; right: -3px;
+  min-width: 18px; height: 18px;
+  background: var(--accent-rose, #e8596a);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 4px;
+  border: 2px solid var(--bg);
+  pointer-events: none;
+}
+
+/* ── Botón guardar hilo en chat ──────────────────────────── */
+.chat-save-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.chat-save-btn:active { transform: scale(0.9); }
+.chat-save--saved {
+  background: var(--accent-dim);
+  border-color: var(--border-active);
+  color: var(--accent);
+}
+
+/* ── Hilos guardados list ────────────────────────────────── */
+.hilos-list {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border);
+  border-top: 1px solid var(--border);
+}
+.hilos-list::-webkit-scrollbar { display: none; }
+
+.hilos-row {
+  background: var(--bg-card);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.hilos-row:active { background: var(--bg-elevated); }
+
+.hilos-row__tag {
+  width: fit-content;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 5px;
+}
+
+.hilos-row__text {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hilos-row__footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hilos-row__time {
+  font-size: 0.68rem;
+  color: var(--text-3);
+  margin-right: auto;
+}
+
+.hilos-row__badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-radius: 999px;
+  padding: 3px 10px 3px 8px;
+}
+
+.hilos-row__remove {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-3);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  touch-action: manipulation;
+}
+.hilos-row__remove:hover {
+  background: rgba(232,89,106,0.1);
+  border-color: rgba(232,89,106,0.3);
+  color: var(--danger);
+}
