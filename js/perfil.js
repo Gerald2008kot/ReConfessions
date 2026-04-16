@@ -23,7 +23,7 @@ export async function initPerfil(user, profile, chipSlot, onBack) {
   _chipSlot = chipSlot;
   _onBack   = onBack;
 
-  document.getElementById('perfil-back-btn')?.addEventListener('click', closePerfil);
+  document.getElementById('perfil-back-btn')?.addEventListener('click', () => closePerfil(false));
   document.getElementById('perfil-signout-btn')?.addEventListener('click', async () => {
     await signOut();
     window.location.replace('./login.html');
@@ -35,7 +35,8 @@ export async function initPerfil(user, profile, chipSlot, onBack) {
 
 // ── Abrir ─────────────────────────────────────────────────────
 export async function openPerfil() {
-  history.pushState({ view: 'perfil' }, '');
+  const { switchView } = await import('./feed.js');
+  switchView('perfil'); // pushes history and sets activeView
 
   const view = document.getElementById('view-perfil');
   document.getElementById('view-feed')?.classList.remove('active');
@@ -47,11 +48,13 @@ export async function openPerfil() {
   loadMyConfessions();
 }
 
-export function closePerfil() {
+export function closePerfil(pushHistory = false) {
   const view = document.getElementById('view-perfil');
   view.classList.remove('active');
   setTimeout(() => { view.hidden = true; }, 300);
   document.getElementById('view-feed')?.classList.add('active');
+  // Sync activeView without pushing another history entry
+  import('./feed.js').then(({ switchView }) => switchView('feed', false));
   _onBack?.();
 }
 
