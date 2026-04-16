@@ -4,7 +4,26 @@ import { getCurrentUser, getProfile }          from './auth.js';
 import { el, formatDate, showToast, getInitials } from './utils.js';
 import { initImageUploader }                   from './upload.js';
 import { initChat, openChat }                  from './chat.js';
-import { Icons }                               from './icons.js';
+import { Icons as _Icons }                      from './icons.js';
+
+// Extend Icons with extra icons needed in feed
+const NS = 'http://www.w3.org/2000/svg';
+function makeSvg(d, size, fill='none', sw='1.5') {
+  const s = document.createElementNS(NS,'svg');
+  s.setAttribute('viewBox','0 0 24 24');
+  s.setAttribute('width',String(size)); s.setAttribute('height',String(size));
+  s.setAttribute('fill',fill); s.setAttribute('stroke','currentColor');
+  s.setAttribute('stroke-width',sw); s.setAttribute('aria-hidden','true');
+  const p = document.createElementNS(NS,'path');
+  p.setAttribute('stroke-linecap','round'); p.setAttribute('stroke-linejoin','round');
+  p.setAttribute('d', d); s.appendChild(p); return s;
+}
+const Icons = {
+  ..._Icons,
+  share:  (n=17) => makeSvg('M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z', n),
+  check:  (n=15) => makeSvg('M4.5 12.75l6 6 9-13.5', n, 'none', '2'),
+  x:      (n=15) => makeSvg('M6 18L18 6M6 6l12 12', n, 'none', '2'),
+};
 import { tagColor, countMap as sharedCountMap } from './shared.js';
 
 // Alias para compatibilidad con chat.js
@@ -265,7 +284,38 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
   });
   footer.appendChild(reactionsRow);
 
+  // ── Compartir ────────────────────────────────────────────────
+  const shareBtn = el('button', {
+    className: 'rc-card__share',
+    attrs:     { type: 'button', 'aria-label': 'Compartir' },
+  });
+  shareBtn.appendChild(Icons.share(17));
+  shareBtn.addEventListener('click', e => { e.stopPropagation(); shareConfession(confession); });
+  footer.appendChild(shareBtn);
+
   card.appendChild(footer);
+
+  // ── Encuesta (si existe) ──────────────────────────────────────
+  if (confession.poll_question) {
+    const pollEl = el('div', { className: 'rc-card__poll' });
+    pollEl.appendChild(el('p', { className: 'rc-card__poll-q', textContent: confession.poll_question }));
+    const pollBtns = el('div', { className: 'rc-card__poll-btns' });
+    const yesBtn = el('button', { className: 'rc-card__poll-btn rc-card__poll-btn--yes', attrs: { type: 'button', 'data-vote': 'yes' } });
+    yesBtn.appendChild(Icons.check(15));
+    yesBtn.appendChild(el('span', { textContent: 'Sí' }));
+    const noBtn  = el('button', { className: 'rc-card__poll-btn rc-card__poll-btn--no',  attrs: { type: 'button', 'data-vote': 'no' } });
+    noBtn.appendChild(Icons.x(15));
+    noBtn.appendChild(el('span', { textContent: 'No' }));
+    [yesBtn, noBtn].forEach(btn => {
+      btn.addEventListener('click', e => { e.stopPropagation(); votePoll(confession.id, btn.dataset.vote, pollEl); });
+    });
+    pollBtns.appendChild(yesBtn); pollBtns.appendChild(noBtn);
+    pollEl.appendChild(pollBtns);
+    card.appendChild(pollEl);
+    // Cargar estado de la encuesta
+    loadPoll(confession.id, pollEl, currentUser?.id);
+  }
+
   card.addEventListener('click', () => handleOpenChat(confession));
   card.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleOpenChat(confession); });
 
@@ -282,6 +332,8 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
 // ── Open chat ─────────────────────────────────────────────────
 async function handleOpenChat(confession) {
   switchView('chat');
+  // Registrar lectura de forma silenciosa
+  sb.rpc('increment_read_count', { p_confession_id: confession.id }).catch(() => {});
   await openChat(confession);
 }
 
@@ -394,18 +446,49 @@ export function canDelete(rowUserId) {
 // ── Compose form ──────────────────────────────────────────────
 function initComposeForm() {
   if (!composeSendBtn || !currentUser) return;
+
+  // Poll toggle
+  const pollBtn   = document.getElementById('compose-poll-btn');
+  const pollRow   = document.getElementById('compose-poll-row');
+  const pollInput = document.getElementById('compose-poll-input');
+  const pollClose = document.getElementById('compose-poll-close');
+
+  pollBtn?.addEventListener('click', () => {
+    const open = pollRow.hidden;
+    pollRow.hidden = !open;
+    pollBtn.classList.toggle('compose-poll-toggle--active', open);
+    if (open) pollInput?.focus();
+  });
+  pollClose?.addEventListener('click', () => {
+    pollRow.hidden = true;
+    if (pollInput) pollInput.value = '';
+    pollBtn?.classList.remove('compose-poll-toggle--active');
+  });
+
   composeSendBtn.addEventListener('click', async () => {
-    const content = composeInput?.value.trim();
+    const text    = composeInput?.value.trim();
     const hashtag = composeHashtag?.value || '#Confesión';
-    if (!content) return;
+    const pollQ   = pollInput?.value.trim() || null;
+    if (!text) return;
     composeSendBtn.disabled = true;
     try {
       let imageUrl = null;
       if (window.__composeUploader?.getFile()) imageUrl = await window.__composeUploader.triggerUpload();
-      const { error } = await sb.from('confessions').insert({ user_id: currentUser.id, content, image_url: imageUrl, hashtag });
+      const { data: conf, error } = await sb.from('confessions')
+        .insert({ user_id: currentUser.id, content: text, image_url: imageUrl, hashtag, poll_question: pollQ })
+        .select('id').single();
       if (error) throw new Error(error.message);
+
+      // Crear poll si hay pregunta
+      if (pollQ && conf?.id) {
+        await sb.from('polls').insert({ confession_id: conf.id, question: pollQ });
+      }
+
       composeInput.value = '';
       window.__composeUploader?.reset();
+      if (pollInput) pollInput.value = '';
+      if (pollRow) pollRow.hidden = true;
+      pollBtn?.classList.remove('compose-poll-toggle--active');
       showToast('¡Confesión publicada!', 'success');
     } catch (err) { showToast(err.message, 'error'); }
     finally { composeSendBtn.disabled = false; }
@@ -450,3 +533,77 @@ function startPolling() {
   }, 10_000);
 }
 function stopPolling() { clearInterval(pollingInterval); pollingInterval = null; }
+
+// ── Compartir ──────────────────────────────────────────────────
+async function shareConfession(confession) {
+  const text = confession.content.slice(0, 120) + (confession.content.length > 120 ? '…' : '');
+  const url  = `${location.origin}${location.pathname}#${confession.id}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: confession.hashtag || 'Re-Confessions', text, url });
+      return;
+    } catch { /* usuario canceló */ }
+  }
+  // Fallback: copiar al portapapeles
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('Enlace copiado al portapapeles.', 'success');
+  } catch {
+    showToast('No se pudo copiar el enlace.', 'error');
+  }
+}
+
+// ── Lecturas ───────────────────────────────────────────────────
+export async function registerRead(confessionId) {
+  await sb.rpc('increment_read_count', { p_confession_id: confessionId });
+}
+
+// ── Encuesta ───────────────────────────────────────────────────
+async function loadPoll(confessionId, container, userId) {
+  const [{ data: poll }, { data: myVote }] = await Promise.all([
+    sb.from('polls').select('id, question, yes_count, no_count').eq('confession_id', confessionId).single(),
+    userId
+      ? sb.from('poll_votes').select('vote').eq('poll_id',
+          (await sb.from('polls').select('id').eq('confession_id', confessionId).single())?.data?.id || ''
+        ).eq('user_id', userId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  if (!poll) return;
+
+  container.dataset.pollId = poll.id;
+  updatePollUI(container, poll.yes_count, poll.no_count, myVote?.data?.vote || null);
+}
+
+function updatePollUI(container, yes, no, voted) {
+  const total  = yes + no || 1;
+  const yesPct = Math.round((yes / total) * 100);
+  const noPct  = 100 - yesPct;
+
+  const yesBtn = container.querySelector('[data-vote="yes"]');
+  const noBtn  = container.querySelector('[data-vote="no"]');
+
+  if (yesBtn) {
+    yesBtn.classList.toggle('rc-card__poll-btn--voted', voted === 'yes');
+    // Show percentage
+    let pctEl = yesBtn.querySelector('.poll-pct');
+    if (!pctEl) { pctEl = document.createElement('span'); pctEl.className = 'poll-pct'; yesBtn.appendChild(pctEl); }
+    pctEl.textContent = yes > 0 || no > 0 ? `${yesPct}%` : '';
+  }
+  if (noBtn) {
+    noBtn.classList.toggle('rc-card__poll-btn--voted', voted === 'no');
+    let pctEl = noBtn.querySelector('.poll-pct');
+    if (!pctEl) { pctEl = document.createElement('span'); pctEl.className = 'poll-pct'; noBtn.appendChild(pctEl); }
+    pctEl.textContent = yes > 0 || no > 0 ? `${noPct}%` : '';
+  }
+}
+
+async function votePoll(confessionId, vote, container) {
+  if (!currentUser) { showToast('Inicia sesión para votar.', 'info'); return; }
+  const pollId = container.dataset.pollId;
+  if (!pollId) return;
+  await sb.rpc('cast_poll_vote', { p_poll_id: pollId, p_user_id: currentUser.id, p_vote: vote });
+  // Recargar conteos
+  const { data: poll } = await sb.from('polls').select('yes_count, no_count').eq('id', pollId).single();
+  const { data: myVote } = await sb.from('poll_votes').select('vote').match({ poll_id: pollId, user_id: currentUser.id }).maybeSingle();
+  if (poll) updatePollUI(container, poll.yes_count, poll.no_count, myVote?.vote || null);
+}
