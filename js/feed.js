@@ -3,7 +3,7 @@ import { sb }                                  from './api.js';
 import { getCurrentUser, getProfile }          from './auth.js';
 import { el, formatDate, showToast, getInitials } from './utils.js';
 import { initImageUploader }                   from './upload.js';
-import { initChat, openChat }                  from './chat.js';
+// chat.js imported dynamically to avoid circular dependency
 import { Icons as _Icons }                      from './icons.js';
 
 // Extend Icons with extra icons needed in feed
@@ -74,21 +74,70 @@ export async function initFeed() {
     window.__composeUploader = initImageUploader(composeImgInput, composeImgPreview, composeProgressBar);
   }
 
-  await initChat(() => switchView('feed', false));
+  // Dynamic import breaks the circular dependency chain
+  const chatMod = await import('./chat.js');
+  chatMod.setCanDelete(canDelete);
+  await chatMod.initChat(() => switchView('feed', false));
   await loadConfessions();
   initComposeForm();
   startRealtime();
 }
 
-// ── Hashtag selector ─────────────────────────────────────────
+// ── Custom hashtag picker ─────────────────────────────────────
 function populateHashtagSelector() {
-  if (!composeHashtag) return;
-  while (composeHashtag.firstChild) composeHashtag.removeChild(composeHashtag.firstChild);
+  const pickerBtn      = document.getElementById('hashtag-picker-btn');
+  const pickerLabel    = document.getElementById('hashtag-picker-label');
+  const pickerDropdown = document.getElementById('hashtag-picker-dropdown');
+  const hiddenInput    = document.getElementById('compose-hashtag');
+  if (!pickerBtn || !pickerDropdown) return;
+
+  let isOpen = false;
+
+  // Build dropdown items
   HASHTAGS.forEach(tag => {
-    const opt = document.createElement('option');
-    opt.value = opt.textContent = tag;
-    composeHashtag.appendChild(opt);
+    const item = el('div', {
+      className:   'hashtag-picker__item',
+      textContent: tag,
+      attrs:       { role: 'option', tabindex: '0' },
+    });
+    // Color pill
+    const { bg, fg } = tagColor(tag);
+    item.style.cssText = `--tag-bg:${bg};--tag-fg:${fg}`;
+    item.addEventListener('click', () => {
+      if (hiddenInput)  hiddenInput.value   = tag;
+      if (pickerLabel)  pickerLabel.textContent = tag;
+      if (pickerLabel)  { pickerLabel.style.background = bg; pickerLabel.style.color = fg; }
+      closePicker();
+    });
+    item.addEventListener('keydown', e => { if (e.key === 'Enter') item.click(); });
+    pickerDropdown.appendChild(item);
   });
+
+  function openPicker() {
+    isOpen = true;
+    pickerDropdown.hidden = false;
+    pickerBtn.setAttribute('aria-expanded', 'true');
+    requestAnimationFrame(() => pickerDropdown.classList.add('hashtag-picker__dropdown--open'));
+  }
+  function closePicker() {
+    isOpen = false;
+    pickerDropdown.classList.remove('hashtag-picker__dropdown--open');
+    setTimeout(() => { pickerDropdown.hidden = true; }, 200);
+    pickerBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  pickerBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    isOpen ? closePicker() : openPicker();
+  });
+  document.addEventListener('click', e => {
+    if (isOpen && !document.getElementById('hashtag-picker')?.contains(e.target)) closePicker();
+  });
+
+  // Init label color
+  const initTag = hiddenInput?.value || '#Confesión';
+  const { bg: iBg, fg: iFg } = tagColor(initTag);
+  if (pickerLabel) { pickerLabel.style.background = iBg; pickerLabel.style.color = iFg; }
 }
 
 // ── Vista switch — CENTRALIZADO ───────────────────────────────
@@ -255,7 +304,55 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
   });
   likeBtn.appendChild(Icons.heart(isLiked, 17));
   likeBtn.appendChild(el('span', { className: 'rc-card__action-count', textContent: String(likeCount) }));
-  likeBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleLike(confession.id, likeBtn); });
+  // Toque corto = like, toque largo (>500ms) = expandir reacciones
+  let pressTimer = null;
+  const REACTIONS = [
+    { emoji: '😢', key: 'sad' },
+    { emoji: '😮', key: 'wow' },
+    { emoji: '🤝', key: 'support' },
+  ];
+
+  function showReactionPicker(anchorBtn) {
+    document.querySelectorAll('.reaction-picker').forEach(p => p.remove());
+    const picker = el('div', { className: 'reaction-picker' });
+    REACTIONS.forEach(({ emoji, key }) => {
+      const btn = el('button', {
+        className: 'reaction-picker__btn',
+        attrs: { type: 'button', 'data-key': key, 'aria-label': key },
+      });
+      btn.textContent = emoji;
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        picker.remove();
+        toggleReaction(confession.id, key, likeBtn, reactionsState);
+      });
+      picker.appendChild(btn);
+    });
+    anchorBtn.appendChild(picker);
+    requestAnimationFrame(() => picker.classList.add('reaction-picker--open'));
+    // Cerrar al tocar fuera
+    const close = e => { if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', close); } };
+    setTimeout(() => document.addEventListener('click', close), 10);
+  }
+
+  // Estado de reacciones para actualizar el botón visualmente
+  const reactionsState = { active: null };
+
+  likeBtn.addEventListener('pointerdown', e => {
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+      showReactionPicker(likeBtn);
+    }, 500);
+  });
+  likeBtn.addEventListener('pointerup', e => {
+    if (pressTimer !== null) {
+      clearTimeout(pressTimer); pressTimer = null;
+      e.stopPropagation();
+      toggleLike(confession.id, likeBtn);
+    }
+  });
+  likeBtn.addEventListener('pointercancel', () => { clearTimeout(pressTimer); pressTimer = null; });
+  likeBtn.addEventListener('contextmenu', e => e.preventDefault()); // prevent context menu on long press
   footer.appendChild(likeBtn);
 
   const commentBtn = el('button', { className: 'rc-card__action', attrs: { type: 'button', 'aria-label': 'Comentarios' } });
@@ -264,25 +361,7 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
   commentBtn.addEventListener('click', (e) => { e.stopPropagation(); handleOpenChat(confession); });
   footer.appendChild(commentBtn);
 
-  // ── Reacciones ──────────────────────────────────────────────
-  const reactionsRow = el('div', { className: 'rc-card__reactions' });
-  [
-    { emoji: '😢', key: 'sad' },
-    { emoji: '😮', key: 'wow' },
-    { emoji: '🤝', key: 'support' },
-  ].forEach(({ emoji, key }) => {
-    const btn = el('button', {
-      className: `rc-card__reaction`,
-      attrs: { type: 'button', 'data-key': key, 'aria-label': key },
-    });
-    const emojiEl = document.createElement('span');
-    emojiEl.textContent = emoji;
-    emojiEl.className = 'rc-card__reaction-emoji';
-    btn.appendChild(emojiEl);
-    btn.addEventListener('click', (e) => { e.stopPropagation(); toggleReaction(confession.id, key, btn); });
-    reactionsRow.appendChild(btn);
-  });
-  footer.appendChild(reactionsRow);
+  // Reacciones: panel oculto, se activa con long-press en el botón de like
 
   // ── Compartir ────────────────────────────────────────────────
   const shareBtn = el('button', {
@@ -325,15 +404,15 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
 
   if (animate) card.addEventListener('animationend', () => card.classList.remove('rc-card--new'), { once: true });
 
-  // Cargar reacciones de forma asíncrona
-  loadReactions(confession.id, reactionsRow, currentUser?.id);
+  // Cargar reacciones de forma asíncrona (actualiza reactionsState y badge)
+  loadReactions(confession.id, likeBtn, reactionsState, currentUser?.id);
 }
 
 // ── Open chat ─────────────────────────────────────────────────
 async function handleOpenChat(confession) {
   switchView('chat');
-  // Registrar lectura de forma silenciosa
   sb.rpc('increment_read_count', { p_confession_id: confession.id }).catch(() => {});
+  const { openChat } = await import('./chat.js');
   await openChat(confession);
 }
 
@@ -373,60 +452,66 @@ async function toggleLike(confessionId, btn) {
 }
 
 // ── Reacciones ────────────────────────────────────────────────
-async function loadReactions(confessionId, container, userId) {
+// Emoji map for reaction display
+const REACTION_EMOJIS = { sad: '😢', wow: '😮', support: '🤝' };
+
+// loadReactions: updates the like button with a small badge if there are reactions
+async function loadReactions(confessionId, likeBtn, state, userId) {
   const { data } = await sb
     .from('reactions')
     .select('reaction_type, user_id')
     .eq('confession_id', confessionId);
   if (!data) return;
 
+  let myReaction = null;
   const counts = {};
-  const userReacted = new Set();
   data.forEach(r => {
     counts[r.reaction_type] = (counts[r.reaction_type] || 0) + 1;
-    if (r.user_id === userId) userReacted.add(r.reaction_type);
+    if (r.user_id === userId) myReaction = r.reaction_type;
   });
 
-  container.querySelectorAll('.rc-card__reaction').forEach(btn => {
-    const key   = btn.dataset.key;
-    const count = counts[key] || 0;
-    // Remove old count span if any
-    btn.querySelector('.rc-card__reaction-count')?.remove();
-    if (count > 0) {
-      const span = document.createElement('span');
-      span.className = 'rc-card__reaction-count';
-      span.textContent = String(count);
-      btn.appendChild(span);
-    }
-    btn.classList.toggle('rc-card__reaction--active', userReacted.has(key));
-  });
+  state.active = myReaction;
+  updateReactionBadge(likeBtn, counts, myReaction);
 }
 
-async function toggleReaction(confessionId, reactionType, btn) {
+function updateReactionBadge(likeBtn, counts, myReaction) {
+  likeBtn.querySelector('.like-reaction-badge')?.remove();
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  if (total === 0 && !myReaction) return;
+
+  const badge = document.createElement('span');
+  badge.className = 'like-reaction-badge';
+  // Show my reaction emoji, or the most popular one
+  const show = myReaction || Object.entries(counts).sort((a,b) => b[1]-a[1])[0]?.[0];
+  if (show) badge.textContent = REACTION_EMOJIS[show] || '';
+  likeBtn.appendChild(badge);
+}
+
+async function toggleReaction(confessionId, reactionType, likeBtn, state) {
   if (!currentUser) { showToast('Inicia sesión para reaccionar.', 'info'); return; }
-  const isActive = btn.classList.contains('rc-card__reaction--active');
-  if (isActive) {
-    await sb.from('reactions').delete().match({ confession_id: confessionId, user_id: currentUser.id, reaction_type: reactionType });
-    btn.classList.remove('rc-card__reaction--active');
+
+  if (state.active === reactionType) {
+    // Quitar reacción
+    await sb.from('reactions').delete()
+      .match({ confession_id: confessionId, user_id: currentUser.id, reaction_type: reactionType });
+    state.active = null;
   } else {
+    // Quitar reacción anterior si la hay
+    if (state.active) {
+      await sb.from('reactions').delete()
+        .match({ confession_id: confessionId, user_id: currentUser.id, reaction_type: state.active });
+    }
     await sb.from('reactions').insert({ confession_id: confessionId, user_id: currentUser.id, reaction_type: reactionType });
-    btn.classList.add('rc-card__reaction--active');
-    btn.classList.add('rc-card__reaction--pop');
-    btn.addEventListener('animationend', () => btn.classList.remove('rc-card__reaction--pop'), { once: true });
+    state.active = reactionType;
+    likeBtn.classList.add('rc-card__action--pop');
+    likeBtn.addEventListener('animationend', () => likeBtn.classList.remove('rc-card__action--pop'), { once: true });
   }
-  // Actualizar conteos
-  const countSpan = btn.querySelector('.rc-card__reaction-count');
-  const current = parseInt(countSpan?.textContent || '0');
-  if (isActive) {
-    if (current <= 1) { countSpan?.remove(); }
-    else if (countSpan) countSpan.textContent = String(current - 1);
-  } else {
-    if (!countSpan) {
-      const s = document.createElement('span');
-      s.className = 'rc-card__reaction-count'; s.textContent = '1';
-      btn.appendChild(s);
-    } else countSpan.textContent = String(current + 1);
-  }
+
+  // Recargar conteos
+  const { data } = await sb.from('reactions').select('reaction_type').eq('confession_id', confessionId);
+  const counts = {};
+  data?.forEach(r => { counts[r.reaction_type] = (counts[r.reaction_type] || 0) + 1; });
+  updateReactionBadge(likeBtn, counts, state.active);
 }
 
 // ── Delete ────────────────────────────────────────────────────
@@ -467,7 +552,7 @@ function initComposeForm() {
 
   composeSendBtn.addEventListener('click', async () => {
     const text    = composeInput?.value.trim();
-    const hashtag = composeHashtag?.value || '#Confesión';
+    const hashtag = document.getElementById('compose-hashtag')?.value || '#Confesión';
     const pollQ   = pollInput?.value.trim() || null;
     if (!text) return;
     composeSendBtn.disabled = true;
