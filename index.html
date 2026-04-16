@@ -72,56 +72,19 @@
 
   <!-- Barra de compose (autenticados) -->
   <div id="compose-bar" class="compose-bar" hidden>
-
-    <!-- Fila 1: Hashtag custom + Encuesta + Imagen -->
     <div class="compose-bar__top">
-
-      <!-- Selector de hashtag personalizado -->
-      <div class="hashtag-picker" id="hashtag-picker">
-        <button id="hashtag-picker-btn" class="hashtag-picker__btn" type="button" aria-haspopup="listbox" aria-expanded="false">
-          <span id="hashtag-picker-label">#Confesión</span>
-          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
-          </svg>
-        </button>
-        <div id="hashtag-picker-dropdown" class="hashtag-picker__dropdown" role="listbox" hidden></div>
-      </div>
-      <!-- Hidden input que guarda el valor seleccionado -->
-      <input type="hidden" id="compose-hashtag" value="#Confesión" />
-
-      <!-- Botón encuesta -->
-      <button id="compose-poll-btn" class="compose-top-btn" type="button" aria-label="Añadir encuesta" title="Añadir encuesta">
-        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
-        </svg>
-      </button>
-
-      <!-- Botón imagen -->
-      <label class="compose-top-btn" for="compose-img-input" title="Adjuntar imagen" aria-label="Adjuntar imagen">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="17" height="17">
+      <select id="compose-hashtag" class="compose-hashtag-select" aria-label="Elige un hashtag"></select>
+      <label class="compose-img-btn" for="compose-img-input" title="Adjuntar imagen" aria-label="Adjuntar imagen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
         </svg>
       </label>
       <input type="file" id="compose-img-input" class="uploader__input" accept="image/jpeg,image/png,image/gif,image/webp" />
     </div>
-
-    <!-- Fila 2: Campo de encuesta (oculta por defecto) -->
-    <div class="compose-poll-row" id="compose-poll-row" hidden>
-      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" style="flex-shrink:0;color:var(--accent)">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
-      </svg>
-      <input id="compose-poll-input" class="compose-poll-input" type="text"
-        placeholder="¿Lo volverías a hacer?" maxlength="120" />
-      <button id="compose-poll-close" class="compose-poll-close" type="button" aria-label="Quitar encuesta">✕</button>
-    </div>
-
-    <!-- Preview imagen + progress -->
     <div id="compose-img-preview" class="compose-img-preview" hidden></div>
     <div class="uploader__progress-track" hidden>
       <div id="compose-progress" class="uploader__progress-bar"></div>
     </div>
-
-    <!-- Fila 3: Textarea + Enviar -->
     <div class="compose-bar__input-row">
       <textarea id="compose-input" class="compose-textarea" placeholder="Confiesa algo…" maxlength="2000" rows="2" aria-label="Escribe tu confesión"></textarea>
       <button id="compose-send-btn" class="compose-send-btn" type="button" aria-label="Publicar">
@@ -405,7 +368,15 @@
     if (event === 'SIGNED_OUT' && !isGuest) window.location.replace('./login.html');
   });
 
-  // popstate centralizado en feed.js
+  // ── Back button (popstate) ──────────────────────────────────
+  window.addEventListener('popstate', () => {
+    // Cerrar el sheet si está abierto
+    if (document.getElementById('profile-sheet')?.classList.contains('open')) {
+      window.__closeProfileSheet();
+      return;
+    }
+    // Las vistas manejan su propio botón de atrás vía switchView
+  });
 
   // ── Logo: recargar el feed ──────────────────────────────────
   document.getElementById('logo-btn').addEventListener('click', () => {
