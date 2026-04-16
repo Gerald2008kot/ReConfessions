@@ -7,13 +7,8 @@ import { sb }                                    from './api.js';
 import { getCurrentUser, getProfile }            from './auth.js';
 import { el, formatDate, showToast, getInitials } from './utils.js';
 import { Icons }                                 from './icons.js';
-import { tagColor }          from './shared.js';
-import { toggleSaveThread } from './hilos.js';
-// hashtagColor alias
-const hashtagColor = tagColor;
-// canDelete injected at init time to avoid circular import
-let feedCanDelete = () => false;
-export function setCanDelete(fn) { feedCanDelete = fn; }
+import { hashtagColor, canDelete as feedCanDelete } from './feed.js';
+import { toggleSaveThread }                          from './hilos.js';
 
 let currentUser      = null;
 let currentProfile   = null;
