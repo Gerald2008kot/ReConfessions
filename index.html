@@ -15,15 +15,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <!-- Registrar Service Worker -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then(r => console.info('[SW] registrado:', r.scope))
-          .catch(e => console.warn('[SW] error:', e));
-      });
-    }
-  </script>
+ 
 </head>
 <body>
 
