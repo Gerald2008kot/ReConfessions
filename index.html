@@ -42,7 +42,6 @@
     <div class="app-header__actions">
       <!-- Hilos guardados (solo autenticados) -->
       <button id="hilos-btn" class="app-header__icon-btn" type="button" aria-label="Hilos guardados" hidden>
-        <!-- Bell / bookmark icon -->
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/>
         </svg>
@@ -51,11 +50,9 @@
 
       <!-- Modo claro/oscuro -->
       <button id="theme-btn" class="app-header__icon-btn" type="button" aria-label="Cambiar tema">
-        <!-- Moon icon (dark mode active) -->
         <svg id="theme-icon-dark" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/>
         </svg>
-        <!-- Sun icon (light mode active) -->
         <svg id="theme-icon-light" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" hidden>
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/>
         </svg>
@@ -66,11 +63,14 @@
     </div>
   </header>
 
+  <!-- ── Filtro por hashtag (chips scrolleables) ── -->
+  <div id="hashtag-filter-bar" class="hashtag-filter-bar" role="group" aria-label="Filtrar por hashtag"></div>
+
   <main id="feed" class="feed-scroll" aria-label="Feed de confesiones" aria-live="polite">
     <p class="feed-empty">Cargando confesiones…</p>
   </main>
-
-  <!-- Barra de compose (autenticados) -->
+  
+    <!-- Barra de compose (autenticados) -->
   <div id="compose-bar" class="compose-bar" hidden>
     <div class="compose-bar__top">
       <select id="compose-hashtag" class="compose-hashtag-select" aria-label="Elige un hashtag"></select>
@@ -79,8 +79,33 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
         </svg>
       </label>
+      <!-- Botón toggle encuesta -->
+      <button id="compose-poll-toggle" class="compose-img-btn compose-poll-btn" type="button" title="Añadir encuesta Sí/No" aria-label="Añadir encuesta">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
+        </svg>
+      </button>
       <input type="file" id="compose-img-input" class="uploader__input" accept="image/jpeg,image/png,image/gif,image/webp" />
     </div>
+
+    <!-- Fila de encuesta (oculta por defecto) -->
+    <div id="compose-poll-row" class="compose-poll-row" hidden>
+      <span class="compose-poll-row__label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"/>
+        </svg>
+        Pregunta Sí/No
+      </span>
+      <input
+        id="compose-poll-input"
+        class="compose-poll-input"
+        type="text"
+        placeholder="¿Me debería disculpar?"
+        maxlength="140"
+        aria-label="Pregunta de la encuesta"
+      />
+    </div>
+
     <div id="compose-img-preview" class="compose-img-preview" hidden></div>
     <div class="uploader__progress-track" hidden>
       <div id="compose-progress" class="uploader__progress-bar"></div>
@@ -104,7 +129,6 @@
     </a>
   </div>
 </div>
-
 
 <!-- ═══════════════════════════════════════════════════════════
      VISTA: CHAT (Hilo)
