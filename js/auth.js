@@ -124,7 +124,7 @@ export function renderHeaderChip(container, profile, onSignOut) {
       const loginBtn = el('a', {
         className:   'chip__signout',
         textContent: '→',
-        attrs:       { href: 'login.html', title: 'Sign in', 'aria-label': 'Sign in' },
+        attrs:       { href: '#login', title: 'Sign in', 'aria-label': 'Sign in' },
       });
 
       guestChip.appendChild(icon);
