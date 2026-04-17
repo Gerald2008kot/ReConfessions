@@ -1419,3 +1419,195 @@ img { display: block; max-width: 100%; }
   border-color: rgba(232,89,106,0.3);
   color: var(--danger);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   NUEVAS FEATURES: Hashtag Filter Chips · Share · Polls
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Hashtag Filter Bar ─────────────────────────────────────── */
+.hashtag-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg);
+}
+.hashtag-filter-bar::-webkit-scrollbar { display: none; }
+
+.hf-chip {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  scroll-snap-align: start;
+  padding: 5px 13px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.12s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.hf-chip:not(.hf-chip--active) {
+  background: var(--chip-bg, var(--bg-card));
+  color: var(--chip-fg, var(--text-3));
+  border-color: transparent;
+}
+.hf-chip:active { transform: scale(0.94); }
+.hf-chip--active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--border-active);
+}
+
+/* ── Share button (in card footer) ─────────────────────────── */
+.rc-card__action--share {
+  margin-left: auto; /* empujar a la derecha */
+}
+.rc-card__action--share:active { color: var(--accent); }
+
+/* ── Poll widget ─────────────────────────────────────────────── */
+.poll-widget {
+  margin: 6px 0 4px;
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.poll-widget__question {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.poll-widget__btns {
+  display: flex;
+  gap: 8px;
+}
+
+.poll-btn {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-2);
+  font-size: 0.73rem;
+  font-weight: 600;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.2s, color 0.2s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.poll-btn:active { opacity: 0.8; }
+.poll-btn--voted {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* barra de progreso (pseudo-elemento de fondo) */
+.poll-btn__bar {
+  position: absolute;
+  inset: 0;
+  background: var(--accent-dim);
+  transform-origin: left;
+  pointer-events: none;
+  transition: width 0.4s var(--ease);
+  border-radius: var(--radius-sm);
+}
+
+.poll-btn__label {
+  position: relative;
+  z-index: 1;
+}
+
+.poll-btn__pct {
+  position: relative;
+  z-index: 1;
+  font-size: 0.68rem;
+  opacity: 0.75;
+  margin-left: 4px;
+}
+
+.poll-widget__total {
+  font-size: 0.65rem;
+  color: var(--text-3);
+  text-align: right;
+}
+
+/* ── Compose: poll toggle button ────────────────────────────── */
+.compose-poll-btn--active {
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+
+/* ── Compose: poll question row ─────────────────────────────── */
+.compose-poll-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  animation: fadeSlideIn 0.22s var(--ease) both;
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.compose-poll-row__label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.compose-poll-input {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  color: var(--text);
+  font-size: 0.78rem;
+  padding: 6px 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.compose-poll-input::placeholder { color: var(--text-3); }
+.compose-poll-input:focus { border-color: var(--accent); }
+
+/* ── Card highlight animation (deep link) ───────────────────── */
+@keyframes cardHighlight {
+  0%   { box-shadow: 0 0 0 0 rgba(155,127,255,0.5); }
+  40%  { box-shadow: 0 0 0 8px rgba(155,127,255,0.2); }
+  100% { box-shadow: 0 0 0 0 rgba(155,127,255,0); }
+}
+.rc-card--highlight {
+  animation: cardHighlight 1.4s var(--ease) both;
+}
