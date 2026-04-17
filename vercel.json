@@ -1,16 +1,13 @@
 {
   "cleanUrls": true,
   "trailingSlash": false,
+
   "routes": [
-    {
-      "src": "/login",
-      "dest": "/login.html"
-    },
-    {
-      "src": "/",
-      "dest": "/index.html"
-    }
+    { "src": "/login", "dest": "/#login" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ],
+
   "headers": [
     {
       "source": "/(.*)",
