@@ -10,10 +10,20 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" />
   <link rel="stylesheet" href="css/app.css" />
-  <link rel="stylesheet" href="css/login.css" />
+  <link rel="manifest" href="manifest.json" />
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-
+  <!-- Registrar Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(r => console.info('[SW] registrado:', r.scope))
+          .catch(e => console.warn('[SW] error:', e));
+      });
+    }
+  </script>
 </head>
 <body>
 
@@ -336,300 +346,158 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════
-     VISTA: LOGIN (Renderizado via JS)
-════════════════════════════════════════════════════════════════ -->
-<div id="view-login" class="view" hidden></div>
 
-<!-- ── Script de Inicialización Único ────────────────────────── -->
+<!-- ── Scripts ────────────────────────────────────────────────── -->
 <script type="module">
-  import { initFeed, switchView } from './js/feed.js';
-  import { renderLoginView, destroyLoginView } from './js/login.js';
-  import { getCurrentUser, getProfile, renderHeaderChip, onAuthStateChange, signOut } from './js/auth.js';
-  import { getInitials } from './js/utils.js';
-  import { initAdmin, openAdmin } from './js/admin.js';
-  import { initPerfil, openPerfil } from './js/perfil.js';
-  import { initHilos, openHilos, updateHilosCount } from './js/hilos.js';
-  import { getSession } from './js/auth.js';
-  import { initRouter, navigateTo, registerView, goBack } from './js/router.js';
+  import { initFeed, switchView }                from './js/feed.js';
+  import { getCurrentUser, getProfile,
+           renderHeaderChip, onAuthStateChange,
+           signOut }                             from './js/auth.js';
+  import { getInitials }                         from './js/utils.js';
+  import { initAdmin, openAdmin }                from './js/admin.js';
+  import { initPerfil, openPerfil }              from './js/perfil.js';
+  import { initHilos, openHilos,
+           updateHilosCount }                    from './js/hilos.js';
 
   const isGuest = sessionStorage.getItem('rc_guest') === '1';
 
-  // ═══════════════════════════════════════════════════════════
-  // INICIALIZACIÓN PRINCIPAL
-  // ═══════════════════════════════════════════════════════════
-  async function initApp() {
-    // Inicializar router primero
-    initRouter();
+  // ── Tema claro/oscuro ───────────────────────────────────────
+  const savedTheme = localStorage.getItem('rc_theme') || 'dark';
+  applyTheme(savedTheme);
 
-    const session = await getSession();
-    
-    if (session || isGuest) {
-      await initAuthenticatedApp(session);
-    } else {
-      showLogin();
-    }
-  }
-
-  function showLogin() {
-    // Ocultar todas las vistas excepto login
-    ['feed', 'chat', 'hilos', 'perfil', 'admin'].forEach(v => {
-      document.getElementById(`view-${v}`).hidden = true;
-    });
-    
-    document.getElementById('view-login').hidden = false;
-    
-    const loginContainer = document.getElementById('view-login');
-    renderLoginView(loginContainer, () => {
-      destroyLoginView();
-      sessionStorage.removeItem('rc_guest');
-      initAuthenticatedApp();
-    });
-  }
-
-  async function initAuthenticatedApp(existingSession = null) {
-    const user = existingSession?.user || await getCurrentUser();
-    const profile = user ? await getProfile(user.id) : null;
-
-    // Ocultar login, mostrar feed
-    document.getElementById('view-login').hidden = true;
-    document.getElementById('view-feed').hidden = false;
-
-    // Registrar vistas en el router
-    registerViews(user, profile);
-
-    // Inicializar componentes
-    initHeader(user, profile);
-    initTheme();
-    initSheetHelpers();
-
-    // Inicializar features
-    await initFeed();
-    
-    if (user) {
-      await initUserFeatures(user, profile);
-    } else {
-      initGuestFeatures();
-    }
-
-    if (profile?.is_admin) {
-      initAdmin(() => navigateTo('feed'));
-    }
-
-    // Establecer vista inicial
-    navigateTo('feed', { replace: true });
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  // REGISTRO DE VISTAS
-  // ═══════════════════════════════════════════════════════════
-  function registerViews(user, profile) {
-    // FEED
-    registerView('feed', {
-      onEnter: () => {
-        document.getElementById('view-feed').hidden = false;
-        document.getElementById('view-feed').classList.add('active');
-      },
-      onLeave: () => {
-        document.getElementById('view-feed').classList.remove('active');
-      }
-    });
-
-    // CHAT (Hilo)
-    registerView('chat', {
-      onEnter: async (data) => {
-        document.getElementById('view-chat').hidden = false;
-        document.getElementById('view-chat').classList.add('active');
-        if (data?.confession) {
-          const { openChat } = await import('./js/chat.js');
-          await openChat(data.confession);
-        }
-      },
-      onLeave: () => {
-        document.getElementById('view-chat').classList.remove('active');
-        document.getElementById('view-chat').hidden = true;
-        // Cerrar chat para limpiar estado
-        import('./js/chat.js').then(({ closeChat }) => closeChat());
-      }
-    });
-
-    // HILOS GUARDADOS
-    registerView('hilos', {
-      onEnter: async () => {
-        document.getElementById('view-hilos').hidden = false;
-        document.getElementById('view-hilos').classList.add('active');
-        await openHilos();
-      },
-      onLeave: () => {
-        document.getElementById('view-hilos').classList.remove('active');
-        document.getElementById('view-hilos').hidden = true;
-      }
-    });
-
-    // PERFIL
-    registerView('perfil', {
-      onEnter: () => {
-        document.getElementById('view-perfil').hidden = false;
-        document.getElementById('view-perfil').classList.add('active');
-        openPerfil();
-      },
-      onLeave: () => {
-        document.getElementById('view-perfil').classList.remove('active');
-        document.getElementById('view-perfil').hidden = true;
-      }
-    });
-
-    // ADMIN
-    if (profile?.is_admin) {
-      registerView('admin', {
-        onEnter: () => {
-          document.getElementById('view-admin').hidden = false;
-          document.getElementById('view-admin').classList.add('active');
-          openAdmin();
-        },
-        onLeave: () => {
-          document.getElementById('view-admin').classList.remove('active');
-          document.getElementById('view-admin').hidden = true;
-        }
-      });
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  // HELPERS (mantener tu código existente, solo cambiar navegación)
-  // ═══════════════════════════════════════════════════════════
-  function initHeader(user, profile) {
-    const chipSlot = document.getElementById('header-chip');
-    renderHeaderChip(chipSlot, profile, window.__openProfileSheet);
-
-    // Logo reload
-    document.getElementById('logo-btn').addEventListener('click', () => {
-      navigateTo('feed');
-    });
-
-    // Auth state
-    onAuthStateChange(event => {
-      if (event === 'SIGNED_OUT' && !isGuest) {
-        destroyLoginView();
-        showLogin();
-      }
-    });
-  }
-
-  function initTheme() {
-    const savedTheme = localStorage.getItem('rc_theme') || 'dark';
-    applyTheme(savedTheme);
-
-    document.getElementById('theme-btn').addEventListener('click', () => {
-      const current = document.documentElement.getAttribute('data-theme');
-      applyTheme(current === 'dark' ? 'light' : 'dark');
-    });
-  }
+  document.getElementById('theme-btn').addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme');
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+  });
 
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('rc_theme', theme);
-    document.getElementById('theme-icon-dark').hidden = theme === 'light';
+    document.getElementById('theme-icon-dark').hidden  = theme === 'light';
     document.getElementById('theme-icon-light').hidden = theme === 'dark';
   }
 
-  function initSheetHelpers() {
-    window.__openProfileSheet = () => {
-      document.getElementById('profile-sheet')?.classList.add('open');
-      document.getElementById('profile-overlay')?.classList.add('open');
-    };
-    window.__closeProfileSheet = () => {
-      document.getElementById('profile-sheet')?.classList.remove('open');
-      document.getElementById('profile-overlay')?.classList.remove('open');
-    };
+  // ── Sheet helpers ───────────────────────────────────────────
+  window.__openProfileSheet  = () => {
+    document.getElementById('profile-sheet')?.classList.add('open');
+    document.getElementById('profile-overlay')?.classList.add('open');
+  };
+  window.__closeProfileSheet = () => {
+    document.getElementById('profile-sheet')?.classList.remove('open');
+    document.getElementById('profile-overlay')?.classList.remove('open');
+  };
+
+  // ── Auth state ──────────────────────────────────────────────
+  onAuthStateChange(event => {
+    if (event === 'SIGNED_OUT' && !isGuest) window.location.replace('./login.html');
+  });
+
+  // ── Back button (popstate) ──────────────────────────────────
+  window.addEventListener('popstate', () => {
+    // Cerrar el sheet si está abierto
+    if (document.getElementById('profile-sheet')?.classList.contains('open')) {
+      window.__closeProfileSheet();
+      return;
+    }
+    // Las vistas manejan su propio botón de atrás vía switchView
+  });
+
+  // ── Logo: recargar el feed ──────────────────────────────────
+  document.getElementById('logo-btn').addEventListener('click', () => {
+    window.location.reload();
+  });
+
+  // ── Boot ────────────────────────────────────────────────────
+  // Manejar shortcuts del manifest (ej: ?open=hilos)
+  const urlParams = new URLSearchParams(location.search);
+  if (urlParams.get('open') === 'hilos') {
+    // Se abrirá después de initHilos en boot
+    window.__pendingOpen = 'hilos';
+    history.replaceState(null, '', location.pathname);
   }
 
-  async function initUserFeatures(user, profile) {
-    // Sheet datos
-    document.getElementById('sheet-name').textContent = profile.full_name;
-    document.getElementById('sheet-email').textContent = user.email;
+  async function boot() {
+    const user = await getCurrentUser();
+    if (!user && !isGuest) { window.location.replace('./login.html'); return; }
 
-    const sheetAv = document.getElementById('sheet-avatar');
-    if (profile.avatar_url) {
-      const img = document.createElement('img');
-      img.src = profile.avatar_url;
-      img.alt = 'Avatar';
-      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
-      sheetAv.appendChild(img);
-    } else {
-      sheetAv.textContent = getInitials(profile.full_name);
+    const chipSlot = document.getElementById('header-chip');
+    const profile  = user ? await getProfile(user.id) : null;
+
+    renderHeaderChip(chipSlot, profile, window.__openProfileSheet);
+
+    // Sheet: datos del usuario
+    if (user && profile) {
+      document.getElementById('sheet-name').textContent  = profile.full_name;
+      document.getElementById('sheet-email').textContent = user.email;
+
+      const sheetAv = document.getElementById('sheet-avatar');
+      if (profile.avatar_url) {
+        const img = document.createElement('img');
+        img.src = profile.avatar_url; img.alt = 'Avatar';
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
+        sheetAv.appendChild(img);
+      } else {
+        sheetAv.textContent = getInitials(profile.full_name);
+      }
     }
 
-    // Sheet eventos
+    // Sheet: cerrar
     document.getElementById('profile-sheet-handle')?.addEventListener('click', window.__closeProfileSheet);
     document.getElementById('profile-overlay')?.addEventListener('click', window.__closeProfileSheet);
 
+    // Sheet: botón Mi Perfil
     document.getElementById('sheet-perfil')?.addEventListener('click', () => {
       window.__closeProfileSheet();
-      navigateTo('perfil');
+      openPerfil();
     });
 
+    // Sheet: botón Admin (solo admins)
     if (profile?.is_admin) {
       const adminBtn = document.getElementById('sheet-admin');
       adminBtn.hidden = false;
-      adminBtn.addEventListener('click', () => {
-        window.__closeProfileSheet();
-        navigateTo('admin');
-      });
+      adminBtn.addEventListener('click', () => { window.__closeProfileSheet(); openAdmin(); });
     }
 
+    // Sheet: cerrar sesión
     document.getElementById('sheet-signout')?.addEventListener('click', async () => {
       sessionStorage.removeItem('rc_guest');
       await signOut();
-      destroyLoginView();
-      showLogin();
+      window.location.replace('./login.html');
     });
 
-    // Hilos guardados - AHORA USA navigateTo
-    document.getElementById('hilos-btn').hidden = false;
-    document.getElementById('hilos-btn').addEventListener('click', () => {
-      navigateTo('hilos');
-    });
-
-    await initHilos(user, () => navigateTo('feed'), async confession => {
-      navigateTo('chat', { confession });
-    });
-    updateHilosCount();
-
-    // Perfil
-    await initPerfil(user, profile, document.getElementById('header-chip'), () => navigateTo('feed'));
-
-    // Shortcut manifest
-    const urlParams = new URLSearchParams(location.search);
-    if (urlParams.get('open') === 'hilos') {
-      history.replaceState(null, '', location.pathname);
-      setTimeout(() => navigateTo('hilos'), 500);
+    // Hilos guardados
+    if (user) {
+      document.getElementById('hilos-btn').hidden = false;
+      document.getElementById('hilos-btn').addEventListener('click', openHilos);
+      await initHilos(user, () => switchView('feed', false), async confession => {
+        switchView('chat');
+        const { openChat } = await import('./js/chat.js');
+        await openChat(confession);
+      });
+      updateHilosCount();
+      if (window.__pendingOpen === 'hilos') {
+        window.__pendingOpen = null;
+        setTimeout(openHilos, 500);
+      }
     }
-  }
 
-  function initGuestFeatures() {
-    document.getElementById('sheet-name').textContent = 'Invitado';
-    document.getElementById('sheet-email').textContent = 'Modo solo lectura';
-    document.getElementById('sheet-avatar').textContent = '👁';
+    // Perfil SPA
+    if (user && profile) {
+      await initPerfil(user, profile, chipSlot, () => switchView('feed', false));
+    }
 
-    document.getElementById('profile-sheet-handle')?.addEventListener('click', window.__closeProfileSheet);
-    document.getElementById('profile-overlay')?.addEventListener('click', window.__closeProfileSheet);
-
-    document.getElementById('sheet-signout').textContent = 'Iniciar Sesión';
-    document.getElementById('sheet-signout').addEventListener('click', () => {
-      window.__closeProfileSheet();
-      sessionStorage.removeItem('rc_guest');
-      destroyLoginView();
-      showLogin();
+    // Admin
+    initAdmin(() => {
+      document.getElementById('view-admin').classList.remove('active');
+      document.getElementById('view-admin').hidden = true;
+      document.getElementById('view-feed').classList.add('active');
     });
 
-    document.getElementById('hilos-btn').hidden = true;
-    document.getElementById('sheet-perfil').hidden = true;
-    document.getElementById('sheet-admin').hidden = true;
+    await initFeed();
   }
 
-  // Iniciar
-  initApp();
+  boot();
 </script>
+
 </body>
 </html>
