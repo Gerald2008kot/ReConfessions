@@ -241,22 +241,51 @@ async function deleteConfession(id, cardEl) {
 async function handleAvatarUpload(e) {
   const file = e.target.files?.[0];
   if (!file) return;
-  const track  = document.getElementById('perfil-avatar-track');
-  const bar    = document.getElementById('perfil-avatar-bar');
-  const status = document.getElementById('perfil-avatar-status');
-  track.hidden = false; bar.style.width = '0%'; status.textContent = '';
+
+  const track     = document.getElementById('perfil-avatar-track');
+  const bar       = document.getElementById('perfil-avatar-bar');
+  const status    = document.getElementById('perfil-avatar-status');
+  const avatarWrap = document.querySelector('.profile-avatar-wrap');
+
+  // Mostrar estado de carga en el avatar
+  avatarWrap?.classList.add('profile-avatar-wrap--loading');
+  track.hidden = false;
+  bar.style.width = '0%';
+  status.textContent = 'Subiendo…';
+
   try {
     const url = await uploadImage(file, pct => { bar.style.width = pct + '%'; });
+
     const { error } = await sb.from('profiles').update({ avatar_url: url }).eq('id', _user.id);
     if (error) throw new Error(error.message);
+
+    // Añadir cache-buster para forzar recarga del img aunque la URL sea igual
+    const cacheBustedUrl = url.includes('?')
+      ? `${url}&_t=${Date.now()}`
+      : `${url}?_t=${Date.now()}`;
+
     _profile = { ..._profile, avatar_url: url };
-    renderHero(_profile);
+
+    // Actualizar hero con URL con cache-buster para refrescar el <img>
+    const heroImg = document.getElementById('perfil-avatar-img');
+    if (heroImg) {
+      heroImg.src = cacheBustedUrl;
+      heroImg.hidden = false;
+      document.getElementById('perfil-initials').hidden = true;
+    }
+
+    // Actualizar chip del header
     renderHeaderChip(_chipSlot, _profile, () => window.location.replace('./login.html'));
+
     status.textContent = '✓ Foto actualizada';
     setTimeout(() => { status.textContent = ''; }, 3000);
-  } catch (err) { showToast(err.message, 'error'); }
-  finally {
-    track.hidden = true; bar.style.width = '0%';
+  } catch (err) {
+    showToast(err.message, 'error');
+    status.textContent = '';
+  } finally {
+    avatarWrap?.classList.remove('profile-avatar-wrap--loading');
+    track.hidden = true;
+    bar.style.width = '0%';
     document.getElementById('perfil-avatar-input').value = '';
   }
 }
