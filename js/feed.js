@@ -13,6 +13,7 @@ import { initImageUploader }                   from './upload.js';
 import { initChat, openChat }                  from './chat.js';
 import { Icons }                               from './icons.js';
 import { tagColor, countMap as sharedCountMap } from './shared.js';
+import { routerPush, routerBack }              from './router.js';
 
 let currentUser    = null;
 let currentProfile = null;
@@ -22,7 +23,6 @@ let pollingInterval  = null;
 let lastConfessionId = null;
 let activeView       = 'feed';
 
-// Hashtag activo para filtrar (null = todos)
 let activeHashtagFilter = null;
 
 let feedEl, feedView, chatView,
@@ -65,12 +65,11 @@ export async function initFeed() {
     window.__composeUploader = uploader;
   }
 
-  await initChat(() => switchView('feed', false));
+  await initChat(_closeChatUI);
   await loadConfessions();
   initComposeForm();
   startRealtime();
 
-  // Navegar directamente a una confesión vía hash (#confession-UUID)
   handleHashNavigation();
 }
 
@@ -80,7 +79,6 @@ function handleHashNavigation() {
   const match = hash.match(/^#confession-([0-9a-f-]{36})$/i);
   if (!match) return;
   const uuid = match[1];
-  // Esperar a que las cards estén pintadas
   setTimeout(async () => {
     const card = document.getElementById(`card-${uuid}`);
     if (card) {
@@ -88,16 +86,11 @@ function handleHashNavigation() {
       card.classList.add('rc-card--highlight');
       card.addEventListener('animationend', () => card.classList.remove('rc-card--highlight'), { once: true });
     } else {
-      // Cargar la confesión específica y abrir su hilo
       const { data } = await sb.from('confessions')
         .select('id, user_id, content, image_url, hashtag, created_at, poll_question')
         .eq('id', uuid).single();
-      if (data) {
-        switchView('chat');
-        await openChat(data);
-      }
+      if (data) { switchView('chat'); await openChat(data); }
     }
-    // Limpiar el hash de la URL sin recargar
     history.replaceState(null, '', location.pathname + location.search);
   }, 400);
 }
@@ -117,12 +110,9 @@ function populateHashtagSelector() {
 function initHashtagFilterChips() {
   const wrapper = document.getElementById('hashtag-filter-bar');
   if (!wrapper) return;
-
-  // Chip "Todos"
   const allChip = buildFilterChip('Todos', true);
   allChip.addEventListener('click', () => setHashtagFilter(null, wrapper));
   wrapper.appendChild(allChip);
-
   HASHTAGS.forEach(tag => {
     const tc = tagColor(tag);
     const chip = buildFilterChip(tag, false, tc);
@@ -146,18 +136,15 @@ function buildFilterChip(label, active, tc = null) {
 
 async function setHashtagFilter(tag, wrapper) {
   activeHashtagFilter = tag;
-
-  // Actualizar estado visual de los chips
   wrapper.querySelectorAll('.hf-chip').forEach(chip => {
     const chipTag = chip.dataset.tag;
     const isActive = tag === null ? chipTag === 'Todos' : chipTag === tag;
     chip.classList.toggle('hf-chip--active', isActive);
   });
-
   await loadConfessions();
 }
 
-// ── Poll toggle (compose) ─────────────────────────────────────
+// ── Poll toggle (compose) ────────────────────────────────────
 function initPollToggle() {
   if (!composePollToggle) return;
   composePollToggle.addEventListener('click', () => {
@@ -171,24 +158,25 @@ function initPollToggle() {
 }
 
 // ── Vista switch ─────────────────────────────────────────────
-export function switchView(view, pushHistory = true) {
-  activeView = view;
-  feedView?.classList.toggle('active', view === 'feed');
-  chatView?.classList.toggle('active', view === 'chat');
-
-  if (pushHistory) {
-    if (view === 'chat') history.pushState({ view: 'chat' }, '');
-    else if (view === 'feed') history.pushState({ view: 'feed' }, '');
-  }
+// Función interna que solo manipula el DOM, sin tocar historial.
+function _closeChatUI() {
+  activeView = 'feed';
+  feedView?.classList.add('active');
+  chatView?.classList.remove('active');
 }
 
-window.addEventListener('popstate', (e) => {
-  if (activeView === 'chat') {
-    import('./chat.js').then(({ closeChat }) => closeChat());
-  } else if (activeView === 'admin') {
-    document.getElementById('admin-back-btn')?.click();
+export function switchView(view, pushHistory = true) {
+  activeView = view;
+
+  if (view === 'chat') {
+    feedView?.classList.remove('active');
+    chatView?.classList.add('active');
+    if (pushHistory) routerPush('chat', _closeChatUI);
+  } else {
+    feedView?.classList.add('active');
+    chatView?.classList.remove('active');
   }
-});
+}
 
 // ── Load confessions ─────────────────────────────────────────
 export async function loadConfessions(containerEl, userId = null) {
@@ -200,7 +188,6 @@ export async function loadConfessions(containerEl, userId = null) {
     .limit(50);
 
   if (userId) query = query.eq('user_id', userId);
-  // Filtro por hashtag activo (solo en el feed principal)
   if (!userId && activeHashtagFilter) query = query.eq('hashtag', activeHashtagFilter);
 
   const { data, error } = await query;
@@ -213,7 +200,6 @@ export async function loadConfessions(containerEl, userId = null) {
     return;
   }
 
-  // Likes del usuario actual
   let userLikedSet = new Set();
   if (currentUser) {
     const { data: liked } = await sb.from('likes').select('confession_id').eq('user_id', currentUser.id);
@@ -229,19 +215,15 @@ export async function loadConfessions(containerEl, userId = null) {
   const likeMap    = buildCountMap(lk, 'confession_id');
   const commentMap = buildCountMap(cm, 'confession_id');
 
-  // Cargar avatares
-  const userIds   = [...new Set(data.map(c => c.user_id))];
+  const userIds = [...new Set(data.map(c => c.user_id))];
   const { data: profiles } = await sb.from('profiles').select('id, avatar_url, full_name').in('id', userIds);
   const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
 
-  // Cargar encuestas (solo confesiones que tienen poll_question)
   const pollIds = data.filter(c => c.poll_question).map(c => c.id);
-  let pollMap = {};
-  let userVoteMap = {};
+  let pollMap = {}, userVoteMap = {};
   if (pollIds.length) {
     const { data: polls } = await sb.from('polls').select('id, confession_id, question, yes_count, no_count').in('confession_id', pollIds);
     pollMap = Object.fromEntries((polls || []).map(p => [p.confession_id, p]));
-
     if (currentUser && polls?.length) {
       const pIds = polls.map(p => p.id);
       const { data: votes } = await sb.from('poll_votes').select('poll_id, vote').eq('user_id', currentUser.id).in('poll_id', pIds);
@@ -274,18 +256,15 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
 
   const card = el('article', {
     className: `rc-card${animate ? ' rc-card--new' : ''}`,
-    attrs:     { id: container === feedEl ? `card-${confession.id}` : undefined },
+    attrs: { id: container === feedEl ? `card-${confession.id}` : undefined },
   });
 
-  // ── Fila superior: avatar + hashtag + tiempo + borrar ────
   const top = el('div', { className: 'rc-card__top' });
 
   const avatarEl = el('div', { className: 'rc-card__avatar' });
   if (authorProfile?.avatar_url) {
     const img = document.createElement('img');
-    img.src     = authorProfile.avatar_url;
-    img.alt     = 'Avatar anónimo';
-    img.loading = 'lazy';
+    img.src = authorProfile.avatar_url; img.alt = 'Avatar anónimo'; img.loading = 'lazy';
     avatarEl.appendChild(img);
   } else {
     avatarEl.appendChild(Icons.user(14));
@@ -295,9 +274,9 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
   const tag = confession.hashtag || '#Confesión';
   const tc  = tagColor(tag);
   top.appendChild(el('span', {
-    className:   'rc-card__tag',
+    className: 'rc-card__tag',
     textContent: tag,
-    attrs:       { style: `background:${tc.bg};color:${tc.fg}` },
+    attrs: { style: `background:${tc.bg};color:${tc.fg}` },
   }));
 
   top.appendChild(el('span', { className: 'rc-card__time', textContent: formatDate(confession.created_at) }));
@@ -305,7 +284,7 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
   if (canDelete(confession.user_id)) {
     const delBtn = el('button', {
       className: 'rc-card__del',
-      attrs:     { type: 'button', 'aria-label': 'Borrar' },
+      attrs: { type: 'button', 'aria-label': 'Borrar' },
     });
     delBtn.appendChild(Icons.trash(15));
     delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteConfession(confession.id, card); });
@@ -314,16 +293,13 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
 
   card.appendChild(top);
 
-  // ── Fila media: texto + thumbnail lateral ────────────────
   const body = el('div', { className: 'rc-card__body-row' });
   body.appendChild(el('p', { className: 'rc-card__text', textContent: confession.content }));
 
   if (confession.image_url) {
     const thumb = el('div', { className: 'rc-card__thumb' });
     const img   = document.createElement('img');
-    img.src     = confession.image_url;
-    img.alt     = 'Imagen adjunta';
-    img.loading = 'lazy';
+    img.src = confession.image_url; img.alt = 'Imagen adjunta'; img.loading = 'lazy';
     img.addEventListener('click', (e) => { e.stopPropagation(); openImageModal(confession.image_url); });
     thumb.appendChild(img);
     body.appendChild(thumb);
@@ -331,17 +307,15 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
 
   card.appendChild(body);
 
-  // ── Encuesta (si existe) ─────────────────────────────────
   if (poll) {
     card.appendChild(buildPollWidget(poll, userVote, card));
   }
 
-  // ── Footer: likes + comentarios + compartir ──────────────
   const footer = el('div', { className: 'rc-card__footer' });
 
   const likeBtn = el('button', {
     className: `rc-card__action${isLiked ? ' rc-card__action--liked' : ''}`,
-    attrs:     { type: 'button', 'aria-label': 'Me gusta' },
+    attrs: { type: 'button', 'aria-label': 'Me gusta' },
   });
   likeBtn.appendChild(Icons.heart(isLiked, 17));
   likeBtn.appendChild(el('span', { className: 'rc-card__action-count', textContent: String(likeCount) }));
@@ -350,24 +324,22 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
 
   const commentBtn = el('button', {
     className: 'rc-card__action',
-    attrs:     { type: 'button', 'aria-label': 'Comentarios' },
+    attrs: { type: 'button', 'aria-label': 'Comentarios' },
   });
   commentBtn.appendChild(Icons.chat(17));
   commentBtn.appendChild(el('span', { className: 'rc-card__action-count', textContent: String(commentCount) }));
   commentBtn.addEventListener('click', (e) => { e.stopPropagation(); handleOpenChat(confession); });
   footer.appendChild(commentBtn);
 
-  // Botón compartir
   const shareBtn = el('button', {
     className: 'rc-card__action rc-card__action--share',
-    attrs:     { type: 'button', 'aria-label': 'Compartir' },
+    attrs: { type: 'button', 'aria-label': 'Compartir' },
   });
   shareBtn.appendChild(Icons.share(17));
   shareBtn.addEventListener('click', (e) => { e.stopPropagation(); shareConfession(confession.id); });
   footer.appendChild(shareBtn);
 
   card.appendChild(footer);
-
   card.addEventListener('click', () => handleOpenChat(confession));
 
   container.querySelector('.feed-empty')?.remove();
@@ -383,28 +355,22 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
 function buildPollWidget(poll, userVote, card) {
   const widget = el('div', { className: 'poll-widget' });
   widget.addEventListener('click', e => e.stopPropagation());
-
   widget.appendChild(el('p', { className: 'poll-widget__question', textContent: poll.question }));
 
   const total = (poll.yes_count || 0) + (poll.no_count || 0);
 
   const buildVoteBtn = (value, count) => {
-    const pct    = total > 0 ? Math.round((count / total) * 100) : 0;
+    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
     const isVoted = userVote === value;
     const btn = el('button', {
       className: `poll-btn${isVoted ? ' poll-btn--voted' : ''}`,
-      attrs:     { type: 'button', 'data-vote': value },
+      attrs: { type: 'button', 'data-vote': value },
     });
-
     const label = el('span', { className: 'poll-btn__label', textContent: value === 'yes' ? '👍 Sí' : '👎 No' });
     const bar   = el('div',  { className: 'poll-btn__bar' });
     bar.style.width = `${pct}%`;
     const pctEl = el('span', { className: 'poll-btn__pct', textContent: `${pct}%` });
-
-    btn.appendChild(label);
-    btn.appendChild(bar);
-    btn.appendChild(pctEl);
-
+    btn.appendChild(label); btn.appendChild(bar); btn.appendChild(pctEl);
     btn.addEventListener('click', () => castVote(poll, value, widget, card));
     return btn;
   };
@@ -414,51 +380,30 @@ function buildPollWidget(poll, userVote, card) {
   btnRow.appendChild(buildVoteBtn('no',  poll.no_count  || 0));
   widget.appendChild(btnRow);
 
-  const totalEl = el('span', { className: 'poll-widget__total', textContent: `${total} voto${total !== 1 ? 's' : ''}` });
-  widget.appendChild(totalEl);
-
+  widget.appendChild(el('span', { className: 'poll-widget__total', textContent: `${total} voto${total !== 1 ? 's' : ''}` }));
   return widget;
 }
 
 async function castVote(poll, vote, widgetEl, card) {
   if (!currentUser) { showToast('Inicia sesión para votar.', 'info'); return; }
-
   try {
-    await sb.rpc('cast_poll_vote', {
-      p_poll_id: poll.id,
-      p_user_id: currentUser.id,
-      p_vote:    vote,
-    });
-    // Recargar datos frescos del poll
+    await sb.rpc('cast_poll_vote', { p_poll_id: poll.id, p_user_id: currentUser.id, p_vote: vote });
     const { data: fresh } = await sb.from('polls').select('id, confession_id, question, yes_count, no_count').eq('id', poll.id).single();
     const { data: voteRow } = await sb.from('poll_votes').select('vote').eq('poll_id', poll.id).eq('user_id', currentUser.id).maybeSingle();
     const newWidget = buildPollWidget(fresh, voteRow?.vote || null, card);
     widgetEl.replaceWith(newWidget);
-  } catch (err) {
-    showToast('Error al votar.', 'error');
-  }
+  } catch (err) { showToast('Error al votar.', 'error'); }
 }
 
-// ── Share confession ──────────────────────────────────────────
+// ── Share ─────────────────────────────────────────────────────
 async function shareConfession(confessionId) {
   const url = `${location.origin}${location.pathname}#confession-${confessionId}`;
-
   if (navigator.share) {
-    try {
-      await navigator.share({ title: 'Re-Confessions', text: 'Mira esta confesión anónima', url });
-      return;
-    } catch (err) {
-      if (err.name === 'AbortError') return; // usuario canceló
-    }
+    try { await navigator.share({ title: 'Re-Confessions', text: 'Mira esta confesión anónima', url }); return; }
+    catch (err) { if (err.name === 'AbortError') return; }
   }
-
-  // Fallback: copiar al portapapeles
-  try {
-    await navigator.clipboard.writeText(url);
-    showToast('¡Enlace copiado!', 'success');
-  } catch {
-    showToast('No se pudo copiar el enlace.', 'error');
-  }
+  try { await navigator.clipboard.writeText(url); showToast('¡Enlace copiado!', 'success'); }
+  catch { showToast('No se pudo copiar el enlace.', 'error'); }
 }
 
 // ── Image modal ───────────────────────────────────────────────
@@ -468,17 +413,15 @@ function openImageModal(url) {
 
   const overlay = el('div', {
     className: 'img-modal',
-    attrs:     { id: 'img-modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Imagen completa' },
+    attrs: { id: 'img-modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Imagen completa' },
   });
 
   const img = document.createElement('img');
-  img.src       = url;
-  img.alt       = 'Imagen completa';
-  img.className = 'img-modal__img';
+  img.src = url; img.alt = 'Imagen completa'; img.className = 'img-modal__img';
 
   const closeBtn = el('button', {
     className: 'img-modal__close',
-    attrs:     { type: 'button', 'aria-label': 'Cerrar' },
+    attrs: { type: 'button', 'aria-label': 'Cerrar' },
   });
   closeBtn.appendChild(Icons.close(20));
 
@@ -487,8 +430,7 @@ function openImageModal(url) {
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); }, { once: true });
 
-  overlay.appendChild(closeBtn);
-  overlay.appendChild(img);
+  overlay.appendChild(closeBtn); overlay.appendChild(img);
   document.body.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add('img-modal--open'));
 }
@@ -562,12 +504,8 @@ function initComposeForm() {
       }).select('id').single();
       if (error) throw new Error(error.message);
 
-      // Crear la encuesta si hay pregunta
       if (pollQuestion && inserted?.id) {
-        await sb.from('polls').insert({
-          confession_id: inserted.id,
-          question:      pollQuestion,
-        });
+        await sb.from('polls').insert({ confession_id: inserted.id, question: pollQuestion });
       }
 
       composeInput.value = '';
@@ -589,7 +527,6 @@ function initComposeForm() {
   });
 }
 
-// ── Hashtag → color — delegado a shared.js ────────────────────
 export { tagColor };
 export const hashtagColor = tagColor;
 
@@ -599,7 +536,6 @@ function startRealtime() {
     realtimeChannel = sb.channel('rc-feed')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'confessions' },
         async ({ new: row }) => {
-          // Si hay filtro activo y la nueva confesión no coincide, no mostrar
           if (activeHashtagFilter && row.hashtag !== activeHashtagFilter) return;
           const { data: p } = await sb.from('profiles').select('id, avatar_url, full_name').eq('id', row.user_id).single();
           buildCard(row, feedEl, true, true, 0, 0, false, p, null, null);
@@ -609,7 +545,6 @@ function startRealtime() {
         ({ old: row }) => document.getElementById(`card-${row.id}`)?.remove())
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'polls' },
         ({ new: poll }) => {
-          // Actualizar el widget de la encuesta en la card si está visible
           const card = document.getElementById(`card-${poll.confession_id}`);
           if (!card) return;
           const existing = card.querySelector('.poll-widget');
