@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Re-Confessions — Entrar</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="css/app.css" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+  <style>
+    :root {
+      --bg:        #0a090e;
+      --bg-card:   #1c1a25;
+      --bg-elev:   #18161f;
+      --border:    rgba(255,255,255,0.07);
+      --accent:    #9b7fff;
+      --amber:     #e8a838;
+      --text:      #e8e4f0;
+      --text-2:    #9891b0;
+      --text-3:    #5a5470;
+      --danger:    #e8596a;
+    }
+    body { overflow: auto; background: var(--bg); color: var(--text); }
+
+    .login-page {
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 20px calc(env(safe-area-inset-bottom) + 24px);
+      padding-top: calc(env(safe-area-inset-top) + 24px);
+      background:
+        radial-gradient(ellipse at 20% 40%, rgba(107,79,216,0.1) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 10%, rgba(232,168,56,0.05) 0%, transparent 50%),
+        var(--bg);
+    }
+    .login-card { width: 100%; max-width: 400px; }
+
+    .login-logo { text-align: center; margin-bottom: 36px; }
+    .login-logo__icon {
+      width: 64px; height: 64px;
+      background: linear-gradient(135deg, var(--accent), #6b4fd8);
+      border-radius: 20px;
+      margin: 0 auto 14px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 40px rgba(155,127,255,0.25);
+    }
+    .login-logo__icon svg { width: 30px; height: 30px; color: #fff; }
+    .login-logo__title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.75rem; font-weight: 700; font-style: italic;
+      letter-spacing: -0.02em; color: var(--text); margin-bottom: 4px;
+    }
+    .login-logo__sub { font-size: 0.875rem; color: var(--text-3); font-style: italic; }
+
+    .login-tabs {
+      display: flex;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 999px; padding: 4px; margin-bottom: 20px;
+    }
+    .login-tab {
+      flex: 1; padding: 10px; border-radius: 999px; border: none;
+      background: transparent; color: var(--text-3);
+      font-size: 0.82rem; font-weight: 600; cursor: pointer;
+      transition: all 0.2s; touch-action: manipulation; min-height: 44px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .login-tab.active {
+      background: var(--bg-card); color: var(--text);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+    }
+
+    .login-fields { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+
+    .login-input {
+      width: 100%; background: var(--bg-card);
+      border: 1px solid var(--border); border-radius: 14px;
+      color: var(--text); padding: 14px 16px; font-size: 0.9rem;
+      outline: none; transition: border-color 0.2s; -webkit-appearance: none;
+    }
+    .login-input::placeholder { color: var(--text-3); }
+    .login-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(155,127,255,0.12); }
+
+    .password-field { position: relative; width: 100%; }
+    .password-field .login-input { padding-right: 48px; }
+    .password-toggle {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: transparent; border: none; padding: 8px; cursor: pointer;
+      color: var(--text-3); transition: color 0.2s;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 8px; -webkit-tap-highlight-color: transparent;
+    }
+    .password-toggle:hover { color: var(--text-2); }
+    .password-toggle:active { color: var(--accent); }
+    .password-toggle svg { width: 20px; height: 20px; }
+
+    .login-error { font-size: 0.8rem; color: var(--danger); min-height: 18px; margin-bottom: 10px; }
+
+    .login-btn-primary {
+      width: 100%;
+      background: linear-gradient(135deg, var(--accent), #6b4fd8);
+      color: #fff; border: none; border-radius: 999px;
+      padding: 15px; font-size: 0.875rem; font-weight: 700;
+      letter-spacing: 0.04em; cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s; touch-action: manipulation;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 20px rgba(155,127,255,0.3);
+    }
+    .login-btn-primary:active { transform: scale(0.98); opacity: 0.9; }
+    .login-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .login-divider {
+      display: flex; align-items: center; gap: 12px; margin: 4px 0 12px;
+    }
+    .login-divider::before, .login-divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+    .login-divider span { font-size: 0.7rem; color: var(--text-3); letter-spacing: 0.1em; text-transform: uppercase; }
+
+    .login-btn-guest {
+      width: 100%; background: transparent;
+      border: 1px solid var(--border); border-radius: 999px;
+      padding: 14px; color: var(--text-2); font-size: 0.875rem; font-weight: 500;
+      cursor: pointer; transition: border-color 0.2s, color 0.2s;
+      touch-action: manipulation; margin-bottom: 16px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .login-btn-guest:active { border-color: var(--accent); color: var(--accent); }
+
+    .login-footnote { text-align: center; font-size: 0.78rem; color: var(--text-3); line-height: 1.6; }
+  </style>
+</head>
+<body>
+
+<div class="login-page">
+  <div class="login-card">
+
+    <div class="login-logo">
+      <div class="login-logo__icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+      </div>
+      <h1 class="login-logo__title">Re-Confessions</h1>
+      <p class="login-logo__sub">Tu espacio seguro y anónimo.</p>
+    </div>
+
+    <div class="login-tabs">
+      <button id="tab-login"  class="login-tab active" type="button">Iniciar Sesión</button>
+      <button id="tab-signup" class="login-tab"        type="button">Registrarse</button>
+    </div>
+
+    <form id="auth-form" novalidate>
+      <div class="login-fields">
+
+        <div id="auth-name-group" hidden>
+          <input type="text" id="auth-name" class="login-input"
+            placeholder="Tu nombre completo (privado)"
+            autocomplete="name" maxlength="80" />
+        </div>
+
+        <input type="email" id="auth-email" class="login-input"
+          placeholder="Correo electrónico"
+          autocomplete="email" required />
+
+        <div class="password-field">
+          <input type="password" id="auth-password" class="login-input"
+            placeholder="Contraseña (mín. 8 caracteres)"
+            autocomplete="current-password" minlength="8" required />
+          <button type="button" class="password-toggle" id="toggle-password" aria-label="Mostrar contraseña">
+            <svg id="icon-eye-open" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            <svg id="icon-eye-closed" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" style="display: none;">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+            </svg>
+          </button>
+        </div>
+
+      </div>
+
+      <p id="auth-error" class="login-error" role="alert" aria-live="assertive"></p>
+
+      <button id="auth-submit" class="login-btn-primary" type="submit">
+        Iniciar Sesión
+      </button>
+    </form>
+
+    <div class="login-divider"><span>o</span></div>
+
+    <button id="guest-btn" class="login-btn-guest" type="button">
+      👁 Explorar como invitado
+    </button>
+
+    <p class="login-footnote">
+      Los invitados pueden leer pero no publicar.<br>
+      Tu nombre <em>nunca</em> se muestra públicamente.
+    </p>
+
+  </div>
+</div>
+
+<script type="module" src="./js/login.js"></script>
+
+</body>
+</html>
