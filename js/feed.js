@@ -918,40 +918,65 @@ export const hashtagColor = tagColor;
 
 // ── Realtime ──────────────────────────────────────────────────
 function startRealtime() {
+  // Cancelar canal anterior si existe (p.ej. al recargar filtro)
+  if (realtimeChannel) {
+    sb.removeChannel(realtimeChannel);
+    realtimeChannel = null;
+  }
+
+  // Timeout de fallback: si en 8 s no llega SUBSCRIBED → polling
+  let subscribeTimeout = setTimeout(() => {
+    console.warn('[realtime] timeout esperando SUBSCRIBED — activando polling');
+    startPolling();
+  }, 8000);
+
   try {
-    realtimeChannel = sb.channel('rc-feed')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'confessions' },
-        async ({ new: row }) => {
-          if (activeHashtagFilter) {
-            const rowTags = row.hashtags?.length ? row.hashtags : (row.hashtag ? [row.hashtag] : []);
-            if (!rowTags.includes(activeHashtagFilter)) return;
-          }
-          const { data: p } = await sb.from('profiles').select('id, avatar_url, full_name').eq('id', row.user_id).single();
-          buildCard(row, feedEl, true, true, 0, 0, false, p, null, null);
-          lastConfessionId = row.id;
-        })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'confessions' },
-        ({ old: row }) => {
-          if (row?.id) document.getElementById(`card-${row.id}`)?.remove();
-        })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'polls' },
-        async ({ new: poll }) => {
-          const card = document.getElementById(`card-${poll.confession_id}`);
-          if (!card) return;
-          const existing = card.querySelector('.poll-widget');
-          if (!existing) return;
-          const { data: fresh } = await sb
-            .from('polls')
-            .select('id, confession_id, question, yes_count, no_count, poll_type, poll_options(id, position, label, vote_count)')
-            .eq('id', poll.id).single();
-          if (!fresh) return;
-          existing.replaceWith(buildPollWidget(fresh, null, card));
-        })
+    // Nombre único por sesión para evitar conflictos con canales "zombi"
+    realtimeChannel = sb.channel(`rc-feed-${Date.now()}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'confessions',
+      }, async ({ new: row }) => {
+        if (activeHashtagFilter) {
+          const rowTags = row.hashtags?.length ? row.hashtags : (row.hashtag ? [row.hashtag] : []);
+          if (!rowTags.includes(activeHashtagFilter)) return;
+        }
+        const { data: p } = await sb.from('profiles')
+          .select('id, avatar_url, full_name').eq('id', row.user_id).single();
+        buildCard(row, feedEl, true, true, 0, 0, false, p, null, null);
+        lastConfessionId = row.id;
+      })
+      .on('postgres_changes', {
+        event: 'DELETE', schema: 'public', table: 'confessions',
+      }, ({ old: row }) => {
+        if (row?.id) document.getElementById(`card-${row.id}`)?.remove();
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'polls',
+      }, async ({ new: poll }) => {
+        const card = document.getElementById(`card-${poll.confession_id}`);
+        if (!card) return;
+        const existing = card.querySelector('.poll-widget');
+        if (!existing) return;
+        const { data: fresh } = await sb
+          .from('polls')
+          .select('id, confession_id, question, yes_count, no_count, poll_type, poll_options(id, position, label, vote_count)')
+          .eq('id', poll.id).single();
+        if (!fresh) return;
+        existing.replaceWith(buildPollWidget(fresh, null, card));
+      })
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED')                               stopPolling();
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') startPolling();
+        console.log('[realtime] status:', status);
+        if (status === 'SUBSCRIBED') {
+          clearTimeout(subscribeTimeout);
+          stopPolling(); // Realtime OK → detener polling si estaba activo
+        }
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          clearTimeout(subscribeTimeout);
+          startPolling();
+        }
       });
   } catch (err) {
+    clearTimeout(subscribeTimeout);
     console.warn('[realtime]', err);
     startPolling();
   }
