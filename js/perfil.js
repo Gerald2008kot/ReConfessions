@@ -1,6 +1,6 @@
 // js/perfil.js
 // ============================================================
-// Vista de Perfil — se renderiza como SPA view dentro de index.html
+// Vista de Perfil — SPA view dentro de index.html
 // ============================================================
 
 import { sb }                                    from './api.js';
@@ -10,20 +10,21 @@ import { uploadImage }                           from './upload.js';
 import { getInitials, showToast, formatDate }    from './utils.js';
 import { Icons }                                 from './icons.js';
 import { tagColor, countMap }                    from './shared.js';
+import { routerPush, routerBack }               from './router.js';
 
 let _user    = null;
 let _profile = null;
 let _chipSlot = null;
 let _onBack   = null;
 
-// ── Init (llamado una vez desde boot) ─────────────────────────
+// ── Init ──────────────────────────────────────────────────────
 export async function initPerfil(user, profile, chipSlot, onBack) {
   _user     = user;
   _profile  = profile;
   _chipSlot = chipSlot;
   _onBack   = onBack;
 
-  document.getElementById('perfil-back-btn')?.addEventListener('click', () => closePerfil(false));
+  document.getElementById('perfil-back-btn')?.addEventListener('click', routerBack);
   document.getElementById('perfil-signout-btn')?.addEventListener('click', async () => {
     await signOut();
     window.location.replace('./login.html');
@@ -35,8 +36,7 @@ export async function initPerfil(user, profile, chipSlot, onBack) {
 
 // ── Abrir ─────────────────────────────────────────────────────
 export async function openPerfil() {
-  const { switchView } = await import('./feed.js');
-  switchView('perfil'); // pushes history and sets activeView
+  routerPush('perfil', _closePerfilUI);
 
   const view = document.getElementById('view-perfil');
   document.getElementById('view-feed')?.classList.remove('active');
@@ -48,14 +48,16 @@ export async function openPerfil() {
   loadMyConfessions();
 }
 
-export function closePerfil(pushHistory = false) {
+function _closePerfilUI() {
   const view = document.getElementById('view-perfil');
   view.classList.remove('active');
   setTimeout(() => { view.hidden = true; }, 300);
   document.getElementById('view-feed')?.classList.add('active');
-  // Sync activeView without pushing another history entry
-  import('./feed.js').then(({ switchView }) => switchView('feed', false));
   _onBack?.();
+}
+
+export function closePerfil() {
+  _closePerfilUI();
 }
 
 // ── Hero ──────────────────────────────────────────────────────
@@ -77,7 +79,7 @@ function renderHero(p) {
   }
 }
 
-// ── Stats ──────────────────────────────────────────────────────
+// ── Stats ─────────────────────────────────────────────────────
 async function loadStats() {
   const [{ count: c1 }, { count: c2 }] = await Promise.all([
     sb.from('confessions').select('id', { count: 'exact', head: true }).eq('user_id', _user.id),
@@ -86,7 +88,6 @@ async function loadStats() {
   document.getElementById('perfil-stat-conf').textContent = c1 ?? 0;
   document.getElementById('perfil-stat-cm').textContent   = c2 ?? 0;
 
-  // Likes recibidos
   const { data: myIds } = await sb.from('confessions').select('id').eq('user_id', _user.id);
   if (myIds?.length) {
     const { count: lk } = await sb.from('likes')
@@ -156,8 +157,7 @@ function buildCard(c, likeCount, commentCount, isLiked) {
   const pill = document.createElement('span');
   pill.className = 'rc-card__tag';
   pill.textContent = c.hashtag || '#Confesión';
-  pill.style.background = bg;
-  pill.style.color = fg;
+  pill.style.background = bg; pill.style.color = fg;
   top.appendChild(pill);
 
   const time = document.createElement('span');
@@ -241,8 +241,8 @@ async function deleteConfession(id, cardEl) {
 async function handleAvatarUpload(e) {
   const file = e.target.files?.[0];
   if (!file) return;
-  const track = document.getElementById('perfil-avatar-track');
-  const bar   = document.getElementById('perfil-avatar-bar');
+  const track  = document.getElementById('perfil-avatar-track');
+  const bar    = document.getElementById('perfil-avatar-bar');
   const status = document.getElementById('perfil-avatar-status');
   track.hidden = false; bar.style.width = '0%'; status.textContent = '';
   try {
