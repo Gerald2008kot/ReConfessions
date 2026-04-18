@@ -5,8 +5,8 @@
 // ============================================================
 
 // ── Supabase ──────────────────────────────────────────────
-const SUPABASE_URL    = 'https://etgnmxbaozxezzatqcpo.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_S77-kfrSTCc4S4ScsNtQPg_MzlKiFjs';
+const SUPABASE_URL    = 'https://ygqryoabjrvfkvtkfpaa.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_W4vs07ePv0I8WooDW6ZF1Q_hyKakkh4';
 
 // Import from the CDN bundle (loaded in HTML via importmap or script tag)
 const { createClient } = supabase;
