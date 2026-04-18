@@ -5,8 +5,8 @@
 // ============================================================
 
 // ── Supabase ──────────────────────────────────────────────
-const SUPABASE_URL    = 'https://ygqryoabjrvfkvtkfpaa.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_W4vs07ePv0I8WooDW6ZF1Q_hyKakkh4';
+const SUPABASE_URL    = 'https://qekigixqfpqnevivzlal.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_ElLPw5gY4fuhhTkQNttXDA_HMsLxOo5';
 
 // Import from the CDN bundle (loaded in HTML via importmap or script tag)
 const { createClient } = supabase;
@@ -30,3 +30,6 @@ export const CLOUDINARY_CONFIG = {
 
 export const CLOUDINARY_UPLOAD_URL =
   `https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/image/upload`;
+
+export const CLOUDINARY_DELETE_URL =
+  `https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/image/destroy`;
