@@ -124,7 +124,11 @@ export function renderHeaderChip(container, profile, onSignOut) {
       const loginBtn = el('a', {
         className:   'chip__signout',
         textContent: '→',
-        attrs:       { href: 'login.html', title: 'Sign in', 'aria-label': 'Sign in' },
+        attrs:       { href: '#', title: 'Sign in', 'aria-label': 'Sign in' },
+      });
+      loginBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (typeof window.__showLogin === 'function') window.__showLogin();
       });
 
       guestChip.appendChild(icon);
@@ -136,7 +140,11 @@ export function renderHeaderChip(container, profile, onSignOut) {
       const loginLink = el('a', {
         className:   'chip chip--login',
         textContent: 'Sign in',
-        attrs:       { href: 'login.html' },
+        attrs:       { href: '#' },
+      });
+      loginLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (typeof window.__showLogin === 'function') window.__showLogin();
       });
       container.appendChild(loginLink);
     }
@@ -293,7 +301,7 @@ export function initAuthForm() {
         submitBtn.textContent = 'Sign In';
         return;
       }
-      window.location.href = 'index.html';
+      window.location.reload();
     } catch (err) {
       errorEl.textContent = err.message;
       submitBtn.disabled = false;
