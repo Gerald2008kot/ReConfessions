@@ -785,9 +785,19 @@ async function toggleLike(confessionId, btn) {
 // ── Delete ────────────────────────────────────────────────────
 async function deleteConfession(id, cardEl) {
   if (!confirm('¿Borrar esta confesión? No se puede deshacer.')) return;
-  const { error } = await sb.from('confessions').delete().eq('id', id);
+
+  let error;
+
+  if (currentProfile?.is_admin) {
+    // Admins usan RPC con SECURITY DEFINER para saltarse RLS
+    ({ error } = await sb.rpc('admin_delete_confession', { p_confession_id: id }));
+  } else {
+    // Dueño borra su propia confesión (RLS permite auth.uid() = user_id)
+    ({ error } = await sb.from('confessions').delete().eq('id', id));
+  }
+
   if (error) { showToast(error.message, 'error'); return; }
-  cardEl?.remove() ?? document.getElementById(`card-${id}`)?.remove();
+  (cardEl ?? document.getElementById(`card-${id}`))?.remove();
   showToast('Confesión eliminada.', 'success');
 }
 
