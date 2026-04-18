@@ -4,7 +4,7 @@
   "routes": [
     {
       "src": "/login",
-      "dest": "/login.html"
+      "dest": "/#login"
     },
     {
       "src": "/",
