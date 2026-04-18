@@ -327,3 +327,54 @@
   justify-content: center;
 }
 .poll-opt-btn--voted .poll-opt-btn__check { display: flex; }
+
+/* ── Avatar loading animation (perfil) ───────────────────────── */
+
+/* El ::after crea el overlay oscuro semitransparente sobre el círculo */
+.profile-avatar-wrap--loading .profile-avatar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 2;
+  animation: avatarFadeIn 0.15s ease both;
+}
+
+/* El ::before crea el spinner centrado sobre el avatar */
+.profile-avatar-wrap--loading .profile-avatar::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  margin-top: -14px;
+  margin-left: -14px;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  z-index: 3;
+  animation: avatarSpin 0.7s linear infinite, avatarFadeIn 0.15s ease both;
+  pointer-events: none;
+}
+
+/* El .profile-avatar necesita position:relative para los pseudo-elementos */
+.profile-avatar-wrap--loading .profile-avatar {
+  position: relative;
+}
+
+/* El botón de edición se desactiva visualmente durante la carga */
+.profile-avatar-wrap--loading .profile-avatar__edit-btn {
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+@keyframes avatarFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes avatarSpin {
+  to { transform: rotate(360deg); }
+}
