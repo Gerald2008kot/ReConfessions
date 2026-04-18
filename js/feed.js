@@ -10,7 +10,7 @@
 import { sb }                                  from './api.js';
 import { getCurrentUser, getProfile }          from './auth.js';
 import { el, formatDate, showToast, getInitials } from './utils.js';
-import { initImageUploader }                   from './upload.js';
+import { initImageUploader, extractPublicId, deleteCloudinaryImage } from './upload.js';
 import { initChat, openChat }                  from './chat.js';
 import { Icons }                               from './icons.js';
 import { tagColor, countMap as sharedCountMap } from './shared.js';
@@ -786,24 +786,53 @@ async function toggleLike(confessionId, btn) {
 async function deleteConfession(id, cardEl) {
   if (!confirm('¿Borrar esta confesión? No se puede deshacer.')) return;
 
-  let error;
+  let error, imageUrl;
 
   if (currentProfile?.is_admin) {
-    // Admins usan RPC con SECURITY DEFINER para saltarse RLS
-    ({ error } = await sb.rpc('admin_delete_confession', { p_confession_id: id }));
+    // Admin usa RPC SECURITY DEFINER; devuelve image_url para limpiar Cloudinary
+    const { data, error: rpcError } = await sb.rpc('admin_delete_confession', { p_confession_id: id });
+    error    = rpcError;
+    imageUrl = data ?? null;
   } else {
-    // Dueño borra su propia confesión (RLS permite auth.uid() = user_id)
+    // Dueño: leer image_url antes de borrar para limpiar Cloudinary después
+    const { data: row } = await sb.from('confessions').select('image_url').eq('id', id).single();
+    imageUrl = row?.image_url ?? null;
     ({ error } = await sb.from('confessions').delete().eq('id', id));
   }
 
   if (error) { showToast(error.message, 'error'); return; }
+
+  // Eliminar imagen huérfana de Cloudinary (fire-and-forget, fallo silencioso)
+  if (imageUrl) {
+    const pid = extractPublicId(imageUrl);
+    if (pid) deleteCloudinaryImage(pid);
+  }
+
   (cardEl ?? document.getElementById(`card-${id}`))?.remove();
   showToast('Confesión eliminada.', 'success');
 }
 
+// ── Permisos de borrado ───────────────────────────────────────
+
+/**
+ * Puede borrar una confesión o comentario propio.
+ * También cubre al admin (control total).
+ * Los invitados (rc_guest) nunca tienen permiso.
+ */
 export function canDelete(rowUserId) {
+  if (sessionStorage.getItem('rc_guest') === '1') return false;
   if (!currentUser) return false;
   return currentUser.id === rowUserId || !!currentProfile?.is_admin;
+}
+
+/**
+ * Dueño del hilo — puede borrar cualquier comentario dentro de su confesión.
+ * No aplica a invitados ni a usuarios no autenticados.
+ */
+export function canDeleteAsThreadOwner(confessionUserId) {
+  if (sessionStorage.getItem('rc_guest') === '1') return false;
+  if (!currentUser) return false;
+  return currentUser.id === confessionUserId;
 }
 
 // ── Compose form ──────────────────────────────────────────────
@@ -902,7 +931,9 @@ function startRealtime() {
           lastConfessionId = row.id;
         })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'confessions' },
-        ({ old: row }) => document.getElementById(`card-${row.id}`)?.remove())
+        ({ old: row }) => {
+          if (row?.id) document.getElementById(`card-${row.id}`)?.remove();
+        })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'polls' },
         async ({ new: poll }) => {
           const card = document.getElementById(`card-${poll.confession_id}`);
