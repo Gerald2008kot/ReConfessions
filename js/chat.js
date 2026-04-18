@@ -7,7 +7,7 @@ import { sb }                                    from './api.js';
 import { getCurrentUser, getProfile }            from './auth.js';
 import { el, formatDate, showToast, getInitials } from './utils.js';
 import { Icons }                                 from './icons.js';
-import { hashtagColor, canDelete as feedCanDelete } from './feed.js';
+import { hashtagColor, canDelete as feedCanDelete, canDeleteAsThreadOwner } from './feed.js';
 import { toggleSaveThread }                          from './hilos.js';
 
 let currentUser      = null;
@@ -241,13 +241,17 @@ function appendBubble(comment, animate) {
   const bubble = el('div', { className: `chat-bubble${isOwn ? ' chat-bubble--own' : ''}` });
   bubble.appendChild(el('p', { className: 'chat-bubble__text', textContent: comment.content }));
 
-  if (feedCanDelete(comment.user_id)) {
+  // Mostrar botón borrar si: admin, autor del comentario, o dueño del hilo
+  const canDel = feedCanDelete(comment.user_id) ||
+                 canDeleteAsThreadOwner(activeConfession?.user_id);
+
+  if (canDel) {
     const delBtn = el('button', {
       className: 'chat-delete-btn',
       attrs:     { type: 'button', 'aria-label': 'Borrar' },
     });
     delBtn.appendChild(Icons.trash(12));
-    delBtn.addEventListener('click', () => deleteComment(comment.id));
+    delBtn.addEventListener('click', () => deleteComment(comment.id, comment.user_id));
     wrap.appendChild(delBtn);
   }
 
@@ -274,12 +278,33 @@ function appendBubble(comment, animate) {
 }
 
 // ── Borrar comentario ─────────────────────────────────────────
-async function deleteComment(id) {
+async function deleteComment(id, commentUserId) {
   if (!confirm('¿Borrar este comentario?')) return;
-  const { error } = await sb.from('comments').delete().eq('id', id);
+
+  const isAdmin      = !!currentProfile?.is_admin;
+  const isOwnComment = currentUser?.id === commentUserId;
+  // Dueño del hilo borrando un comentario ajeno
+  const isThreadOwner = !isOwnComment &&
+                        currentUser?.id === activeConfession?.user_id;
+
+  let error;
+
+  if (isAdmin) {
+    // Admin — control total via RPC SECURITY DEFINER
+    ({ error } = await sb.rpc('admin_delete_comment', { p_comment_id: id }));
+  } else if (isThreadOwner) {
+    // Dueño del hilo moderando comentarios ajenos via RPC SECURITY DEFINER
+    ({ error } = await sb.rpc('thread_owner_delete_comment', { p_comment_id: id }));
+  } else {
+    // Autor del comentario — RLS permite auth.uid() = user_id
+    ({ error } = await sb.from('comments').delete().eq('id', id));
+  }
+
   if (error) { showToast(error.message, 'error'); return; }
+
   document.getElementById(`bubble-${id}`)?.remove();
   showToast('Comentario eliminado.', 'success');
+
   if (!commentListEl.querySelector('.chat-row')) {
     commentListEl.appendChild(el('p', { className: 'chat-empty', textContent: 'Sé el primero en responder.' }));
   }
@@ -322,7 +347,9 @@ function startCommentRealtime(confessionId) {
         ({ new: row }) => { appendBubble(row, true); lastCommentId = row.id; })
       .on('postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'comments' },
-        ({ old: row }) => document.getElementById(`bubble-${row.id}`)?.remove())
+        ({ old: row }) => {
+          if (row?.id) document.getElementById(`bubble-${row.id}`)?.remove();
+        })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') stopPolling();
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') startPolling(confessionId);
