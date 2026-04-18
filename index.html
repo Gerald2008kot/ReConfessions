@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" />
   <link rel="stylesheet" href="css/app.css" />
+  <link rel="stylesheet" href="css/patch.css" />
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -54,29 +55,68 @@
 
   <div id="compose-bar" class="compose-bar" hidden>
     <div class="compose-bar__top">
-      <select id="compose-hashtag" class="compose-hashtag-select" aria-label="Elige un hashtag"></select>
+
+      <!-- Picker custom de hashtags (el <select> nativo está oculto vía CSS) -->
+      <select id="compose-hashtag" aria-hidden="true" tabindex="-1"></select>
+      <div id="ht-picker" class="ht-picker" style="flex:1;min-width:0"></div>
+
       <label class="compose-img-btn" for="compose-img-input" title="Adjuntar imagen" aria-label="Adjuntar imagen">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
         </svg>
       </label>
-      <button id="compose-poll-toggle" class="compose-img-btn compose-poll-btn" type="button" title="Añadir encuesta Sí/No" aria-label="Añadir encuesta">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18">
+
+      <button id="compose-poll-toggle" class="compose-img-btn compose-poll-btn" type="button" title="Añadir encuesta" aria-label="Añadir encuesta">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
         </svg>
       </button>
+
       <input type="file" id="compose-img-input" class="uploader__input" accept="image/jpeg,image/png,image/gif,image/webp" />
     </div>
 
+    <!-- ── Panel de encuesta ────────────────────────────────── -->
     <div id="compose-poll-row" class="compose-poll-row" hidden>
-      <span class="compose-poll-row__label">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"/>
-        </svg>
-        Pregunta Sí/No
-      </span>
-      <input id="compose-poll-input" class="compose-poll-input" type="text"
-        placeholder="¿Me debería disculpar?" maxlength="140" aria-label="Pregunta de la encuesta" />
+
+      <!-- Selector tipo: Sí/No | Opciones -->
+      <div class="compose-poll-type-row">
+        <button id="poll-type-simple" class="compose-poll-type-btn compose-poll-type-btn--active"
+                type="button" data-type="simple">
+          <!-- thumb-up SVG inline -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="15" height="15" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a.75.75 0 01.75-.75A2.25 2.25 0 0116.5 4.5c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23H5.904M14.25 9h2.25M5.904 18.75c.083.205.173.405.27.602.197.4-.078.898-.523.898h-.908c-.889 0-1.713-.518-1.972-1.368a12 12 0 01-.521-3.507c0-1.553.295-3.036.831-4.398C3.387 10.203 4.167 9.75 5 9.75h1.053c.472 0 .745.556.5.96a8.958 8.958 0 00-1.302 4.665c0 1.194.232 2.333.654 3.375z"/>
+          </svg>
+          Sí / No
+        </button>
+        <button id="poll-type-advanced" class="compose-poll-type-btn"
+                type="button" data-type="advanced">
+          <!-- bar-chart SVG inline -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="15" height="15" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
+          </svg>
+          Opciones
+        </button>
+      </div>
+
+      <!-- Pregunta -->
+      <div class="compose-poll-question-wrap">
+        <span id="compose-poll-label" class="compose-poll-row__label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="13" height="13" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"/>
+          </svg>
+          Pregunta Sí/No
+        </span>
+        <input id="compose-poll-input" class="compose-poll-input" type="text"
+               placeholder="¿Me debería disculpar?" maxlength="140" aria-label="Pregunta de la encuesta" />
+      </div>
+
+      <!-- Opciones avanzadas (grid 2×2) -->
+      <div id="compose-poll-options" class="compose-poll-options" hidden>
+        <input class="compose-poll-option-input" type="text" placeholder="Opción 1" maxlength="100" aria-label="Opción 1" />
+        <input class="compose-poll-option-input" type="text" placeholder="Opción 2" maxlength="100" aria-label="Opción 2" />
+        <input class="compose-poll-option-input" type="text" placeholder="Opción 3 (opcional)" maxlength="100" aria-label="Opción 3" />
+        <input class="compose-poll-option-input" type="text" placeholder="Opción 4 (opcional)" maxlength="100" aria-label="Opción 4" />
+      </div>
     </div>
 
     <div id="compose-img-preview" class="compose-img-preview" hidden></div>
@@ -283,6 +323,7 @@
 </div>
 
 
+
 <!-- ═══════════════════════════════════════════════════════════
      BOTTOM SHEET: Opciones de usuario
 ════════════════════════════════════════════════════════════════ -->
@@ -334,7 +375,6 @@
 
   const isGuest = sessionStorage.getItem('rc_guest') === '1';
 
-  // ── Tema ────────────────────────────────────────────────────
   const savedTheme = localStorage.getItem('rc_theme') || 'dark';
   applyTheme(savedTheme);
 
@@ -350,40 +390,30 @@
     document.getElementById('theme-icon-light').hidden = theme === 'dark';
   }
 
-  // ── Sheet helpers ───────────────────────────────────────────
   function openProfileSheet() {
     document.getElementById('profile-sheet')?.classList.add('open');
     document.getElementById('profile-overlay')?.classList.add('open');
     routerPush('sheet', closeProfileSheet);
   }
-
   function closeProfileSheet() {
     document.getElementById('profile-sheet')?.classList.remove('open');
     document.getElementById('profile-overlay')?.classList.remove('open');
   }
-
-  // Exponer globalmente por compatibilidad con otros módulos
   window.__openProfileSheet  = openProfileSheet;
   window.__closeProfileSheet = closeProfileSheet;
 
-  // ── Auth state ──────────────────────────────────────────────
   onAuthStateChange(event => {
     if (event === 'SIGNED_OUT' && !isGuest) window.location.replace('./login.html');
   });
 
-  // ── Logo: recargar el feed ──────────────────────────────────
-  document.getElementById('logo-btn').addEventListener('click', () => {
-    window.location.reload();
-  });
+  document.getElementById('logo-btn').addEventListener('click', () => window.location.reload());
 
-  // ── Shortcut: ?open=hilos ───────────────────────────────────
   const urlParams = new URLSearchParams(location.search);
   if (urlParams.get('open') === 'hilos') {
     window.__pendingOpen = 'hilos';
     history.replaceState(null, '', location.pathname);
   }
 
-  // ── Boot ────────────────────────────────────────────────────
   async function boot() {
     const user = await getCurrentUser();
     if (!user && !isGuest) { window.location.replace('./login.html'); return; }
@@ -396,7 +426,6 @@
     if (user && profile) {
       document.getElementById('sheet-name').textContent  = profile.full_name;
       document.getElementById('sheet-email').textContent = user.email;
-
       const sheetAv = document.getElementById('sheet-avatar');
       if (profile.avatar_url) {
         const img = document.createElement('img');
@@ -408,34 +437,26 @@
       }
     }
 
-    // Sheet: cerrar al tocar handle u overlay
     document.getElementById('profile-sheet-handle')?.addEventListener('click', routerBack);
     document.getElementById('profile-overlay')?.addEventListener('click', routerBack);
 
-    // Sheet: Mi Perfil
     document.getElementById('sheet-perfil')?.addEventListener('click', () => {
-      routerBack(); // cierra el sheet
-      setTimeout(openPerfil, 50); // pequeño delay para que cierre primero
+      routerBack();
+      setTimeout(openPerfil, 50);
     });
 
-    // Sheet: Admin
     if (profile?.is_admin) {
       const adminBtn = document.getElementById('sheet-admin');
       adminBtn.hidden = false;
-      adminBtn.addEventListener('click', () => {
-        routerBack();
-        setTimeout(openAdmin, 50);
-      });
+      adminBtn.addEventListener('click', () => { routerBack(); setTimeout(openAdmin, 50); });
     }
 
-    // Sheet: cerrar sesión
     document.getElementById('sheet-signout')?.addEventListener('click', async () => {
       sessionStorage.removeItem('rc_guest');
       await signOut();
       window.location.replace('./login.html');
     });
 
-    // Hilos guardados
     if (user) {
       document.getElementById('hilos-btn').hidden = false;
       document.getElementById('hilos-btn').addEventListener('click', openHilos);
@@ -451,12 +472,8 @@
       }
     }
 
-    // Perfil
-    if (user && profile) {
-      await initPerfil(user, profile, chipSlot, () => switchView('feed', false));
-    }
+    if (user && profile) await initPerfil(user, profile, chipSlot, () => switchView('feed', false));
 
-    // Admin
     initAdmin(() => {
       document.getElementById('view-admin').classList.remove('active');
       document.getElementById('view-admin').hidden = true;
