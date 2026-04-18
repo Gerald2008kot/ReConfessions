@@ -3,7 +3,7 @@
 // Cloudinary Unsigned Upload
 // ============================================================
 
-import { CLOUDINARY_CONFIG, CLOUDINARY_UPLOAD_URL } from './api.js';
+import { CLOUDINARY_CONFIG, CLOUDINARY_UPLOAD_URL, CLOUDINARY_DELETE_URL } from './api.js';
 import { showToast } from './utils.js';
 
 const MAX_FILE_SIZE_MB = 5;
@@ -173,4 +173,69 @@ export function initImageUploader(inputEl, previewEl, progressEl) {
     triggerUpload,
     reset,
   };
+}
+
+/**
+ * Extrae el public_id de Cloudinary a partir de una secure_url.
+ * Ej: "https://res.cloudinary.com/dxxx/image/upload/v123/re-confessions/abc.jpg"
+ *  → "re-confessions/abc"   (sin extensión)
+ *
+ * @param {string} url
+ * @returns {string|null}
+ */
+export function extractPublicId(url) {
+  if (!url) return null;
+  try {
+    // La URL tiene la forma: .../image/upload/<version?>/<folder/name>.<ext>
+    const match = url.match(/\/image\/upload\/(?:v\d+\/)?(.+)\.[a-z0-9]+$/i);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Solicita la eliminación de una imagen en Cloudinary.
+ *
+ * IMPORTANTE: La API /destroy requiere autenticación firmada (api_key + signature)
+ * para uploads privados. Para uploads con preset "unsigned" Cloudinary no expone
+ * un endpoint público de borrado sin firma, por lo que la solución correcta es
+ * usar una Supabase Edge Function o un proxy propio que firme la petición con
+ * api_secret. Este helper intenta un borrado "unsigned" (sólo funciona si el
+ * preset lo permite o si usas un proxy) y falla silenciosamente para no bloquear
+ * el flujo principal de la app.
+ *
+ * @param {string} publicId  - El public_id obtenido con extractPublicId()
+ * @returns {Promise<boolean>} - true si se borró, false si falló
+ */
+export async function deleteCloudinaryImage(publicId) {
+  if (!publicId) return false;
+  try {
+    const body = new URLSearchParams();
+    body.append('public_id',    publicId);
+    body.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
+
+    const res = await fetch(CLOUDINARY_DELETE_URL, {
+      method: 'POST',
+      body,
+    });
+
+    if (!res.ok) {
+      console.warn('[Cloudinary] delete failed — status', res.status,
+        '— configura una Edge Function para borrados firmados.');
+      return false;
+    }
+
+    const json = await res.json();
+    if (json.result === 'ok') return true;
+
+    // "not found" no es un error crítico (imagen ya borrada o nunca existió)
+    if (json.result === 'not found') return true;
+
+    console.warn('[Cloudinary] delete result:', json.result);
+    return false;
+  } catch (err) {
+    console.warn('[Cloudinary] delete error:', err.message);
+    return false;
+  }
 }
