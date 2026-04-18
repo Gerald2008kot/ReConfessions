@@ -7,21 +7,12 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Inter:wght@400;500;600;700&display=swap" />
   <link rel="stylesheet" href="css/app.css" />
-  <link rel="manifest" href="manifest.json" />
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
-    }
-  </script>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <style>
-    /* Estilos exclusivos del login */
     :root {
       --bg:        #0a090e;
       --bg-card:   #1c1a25;
@@ -96,41 +87,18 @@
     .login-input::placeholder { color: var(--text-3); }
     .login-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(155,127,255,0.12); }
 
-    /* Contenedor del input de contraseña con botón toggle */
-    .password-field {
-      position: relative;
-      width: 100%;
-    }
-    .password-field .login-input {
-      padding-right: 48px;
-    }
+    .password-field { position: relative; width: 100%; }
+    .password-field .login-input { padding-right: 48px; }
     .password-toggle {
-      position: absolute;
-      right: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: transparent;
-      border: none;
-      padding: 8px;
-      cursor: pointer;
-      color: var(--text-3);
-      transition: color 0.2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 8px;
-      -webkit-tap-highlight-color: transparent;
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: transparent; border: none; padding: 8px; cursor: pointer;
+      color: var(--text-3); transition: color 0.2s;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 8px; -webkit-tap-highlight-color: transparent;
     }
-    .password-toggle:hover {
-      color: var(--text-2);
-    }
-    .password-toggle:active {
-      color: var(--accent);
-    }
-    .password-toggle svg {
-      width: 20px;
-      height: 20px;
-    }
+    .password-toggle:hover { color: var(--text-2); }
+    .password-toggle:active { color: var(--accent); }
+    .password-toggle svg { width: 20px; height: 20px; }
 
     .login-error { font-size: 0.8rem; color: var(--danger); min-height: 18px; margin-bottom: 10px; }
 
@@ -183,7 +151,6 @@
       <p class="login-logo__sub">Tu espacio seguro y anónimo.</p>
     </div>
 
-    <!-- Tabs -->
     <div class="login-tabs">
       <button id="tab-login"  class="login-tab active" type="button">Iniciar Sesión</button>
       <button id="tab-signup" class="login-tab"        type="button">Registrarse</button>
@@ -207,12 +174,10 @@
             placeholder="Contraseña (mín. 8 caracteres)"
             autocomplete="current-password" minlength="8" required />
           <button type="button" class="password-toggle" id="toggle-password" aria-label="Mostrar contraseña">
-            <!-- Icono ojo abierto -->
             <svg id="icon-eye-open" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
-            <!-- Icono ojo cerrado (oculto inicialmente) -->
             <svg id="icon-eye-closed" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" style="display: none;">
               <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
             </svg>
@@ -242,33 +207,7 @@
   </div>
 </div>
 
-
-<script type="module">
-  import { initAuthForm, getSession } from './js/auth.js';
-
-  const session = await getSession();
-  if (session) { window.location.replace('./index.html'); }
-  else         { initAuthForm(); }
-
-  document.getElementById('guest-btn').addEventListener('click', () => {
-    sessionStorage.setItem('rc_guest', '1');
-    window.location.replace('./index.html');
-  });
-
-  // Toggle para mostrar/ocultar contraseña
-  const toggleBtn = document.getElementById('toggle-password');
-  const passwordInput = document.getElementById('auth-password');
-  const iconOpen = document.getElementById('icon-eye-open');
-  const iconClosed = document.getElementById('icon-eye-closed');
-
-  toggleBtn.addEventListener('click', () => {
-    const isPassword = passwordInput.type === 'password';
-    passwordInput.type = isPassword ? 'text' : 'password';
-    iconOpen.style.display = isPassword ? 'none' : 'block';
-    iconClosed.style.display = isPassword ? 'block' : 'none';
-    toggleBtn.setAttribute('aria-label', isPassword ? 'Ocultar contraseña' : 'Mostrar contraseña');
-  });
-</script>
+<script type="module" src="./js/login.js"></script>
 
 </body>
 </html>
