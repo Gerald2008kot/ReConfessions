@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" />
   <link rel="stylesheet" href="css/app.css" />
   <link rel="stylesheet" href="css/patch.css" />
+  <link rel="stylesheet" href="css/patch2.css" />
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -27,6 +28,14 @@
     </button>
 
     <div class="app-header__actions">
+
+      <button id="notif-btn" class="app-header__icon-btn" type="button" aria-label="Notificaciones" style="position:relative" hidden>
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
+        </svg>
+        <span id="notif-badge" class="notif-badge" hidden>0</span>
+      </button>
+
       <button id="hilos-btn" class="app-header__icon-btn" type="button" aria-label="Hilos guardados" hidden>
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/>
@@ -47,16 +56,15 @@
     </div>
   </header>
 
-  <div id="hashtag-filter-bar" class="hashtag-filter-bar" role="group" aria-label="Filtrar por hashtag"></div>
-
   <main id="feed" class="feed-scroll" aria-label="Feed de confesiones" aria-live="polite">
     <p class="feed-empty">Cargando confesiones…</p>
   </main>
 
+  <div id="feed-sentinel" aria-hidden="true"></div>
+  <div id="feed-loading-more" hidden>Cargando más…</div>
+
   <div id="compose-bar" class="compose-bar" hidden>
     <div class="compose-bar__top">
-
-      <!-- Picker custom de hashtags (el <select> nativo está oculto vía CSS) -->
       <select id="compose-hashtag" aria-hidden="true" tabindex="-1"></select>
       <div id="ht-picker" class="ht-picker" style="flex:1;min-width:0"></div>
 
@@ -75,30 +83,21 @@
       <input type="file" id="compose-img-input" class="uploader__input" accept="image/jpeg,image/png,image/gif,image/webp" />
     </div>
 
-    <!-- ── Panel de encuesta ────────────────────────────────── -->
     <div id="compose-poll-row" class="compose-poll-row" hidden>
-
-      <!-- Selector tipo: Sí/No | Opciones -->
       <div class="compose-poll-type-row">
-        <button id="poll-type-simple" class="compose-poll-type-btn compose-poll-type-btn--active"
-                type="button" data-type="simple">
-          <!-- thumb-up SVG inline -->
+        <button id="poll-type-simple" class="compose-poll-type-btn compose-poll-type-btn--active" type="button" data-type="simple">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="15" height="15" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a.75.75 0 01.75-.75A2.25 2.25 0 0116.5 4.5c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23H5.904M14.25 9h2.25M5.904 18.75c.083.205.173.405.27.602.197.4-.078.898-.523.898h-.908c-.889 0-1.713-.518-1.972-1.368a12 12 0 01-.521-3.507c0-1.553.295-3.036.831-4.398C3.387 10.203 4.167 9.75 5 9.75h1.053c.472 0 .745.556.5.96a8.958 8.958 0 00-1.302 4.665c0 1.194.232 2.333.654 3.375z"/>
           </svg>
           Sí / No
         </button>
-        <button id="poll-type-advanced" class="compose-poll-type-btn"
-                type="button" data-type="advanced">
-          <!-- bar-chart SVG inline -->
+        <button id="poll-type-advanced" class="compose-poll-type-btn" type="button" data-type="advanced">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="15" height="15" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/>
           </svg>
           Opciones
         </button>
       </div>
-
-      <!-- Pregunta -->
       <div class="compose-poll-question-wrap">
         <span id="compose-poll-label" class="compose-poll-row__label">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="13" height="13" aria-hidden="true">
@@ -106,16 +105,13 @@
           </svg>
           Pregunta Sí/No
         </span>
-        <input id="compose-poll-input" class="compose-poll-input" type="text"
-               placeholder="¿Me debería disculpar?" maxlength="140" aria-label="Pregunta de la encuesta" />
+        <input id="compose-poll-input" class="compose-poll-input" type="text" placeholder="¿Me debería disculpar?" maxlength="140" aria-label="Pregunta de la encuesta" />
       </div>
-
-      <!-- Opciones avanzadas (grid 2×2) -->
       <div id="compose-poll-options" class="compose-poll-options" hidden>
-        <input class="compose-poll-option-input" type="text" placeholder="Opción 1" maxlength="100" aria-label="Opción 1" />
-        <input class="compose-poll-option-input" type="text" placeholder="Opción 2" maxlength="100" aria-label="Opción 2" />
-        <input class="compose-poll-option-input" type="text" placeholder="Opción 3 (opcional)" maxlength="100" aria-label="Opción 3" />
-        <input class="compose-poll-option-input" type="text" placeholder="Opción 4 (opcional)" maxlength="100" aria-label="Opción 4" />
+        <input class="compose-poll-option-input" type="text" placeholder="Opción 1" maxlength="100" />
+        <input class="compose-poll-option-input" type="text" placeholder="Opción 2" maxlength="100" />
+        <input class="compose-poll-option-input" type="text" placeholder="Opción 3 (opcional)" maxlength="100" />
+        <input class="compose-poll-option-input" type="text" placeholder="Opción 4 (opcional)" maxlength="100" />
       </div>
     </div>
 
@@ -143,6 +139,7 @@
   </div>
 </div>
 
+
 <!-- ═══════════════════════════════════════════════════════════
      VISTA: CHAT (Hilo)
 ════════════════════════════════════════════════════════════════ -->
@@ -156,7 +153,6 @@
     <h2 class="app-header__title">Hilo</h2>
     <div id="chat-save-slot" style="display:flex;align-items:center;min-width:44px;justify-content:flex-end"></div>
   </header>
-
   <div class="chat-scroll">
     <div id="chat-confession-slot" class="chat-confession-slot"></div>
     <div class="chat-divider">
@@ -166,7 +162,6 @@
     </div>
     <div id="chat-comment-list" class="chat-comment-list" role="log" aria-live="polite"></div>
   </div>
-
   <div id="chat-input-bar" class="chat-input-bar" hidden>
     <input id="chat-comment-input" class="chat-input" type="text" placeholder="Escribe un consejo…" maxlength="500" aria-label="Tu comentario" />
     <button id="chat-comment-submit" class="chat-send-btn" type="button" aria-label="Enviar">Enviar</button>
@@ -209,9 +204,7 @@
     <h2 class="app-header__title">Mi Perfil</h2>
     <div style="min-width:44px"></div>
   </header>
-
   <div style="overflow-y:auto;flex:1;scrollbar-width:none;">
-
     <div class="profile-hero">
       <div class="profile-avatar-wrap">
         <div class="profile-avatar">
@@ -225,16 +218,13 @@
         </label>
         <input type="file" id="perfil-avatar-input" class="uploader__input" accept="image/jpeg,image/png,image/gif,image/webp" />
       </div>
-
       <h2 id="perfil-name"  class="profile-name"></h2>
       <p  id="perfil-email" class="profile-email"></p>
       <span id="perfil-admin-badge" class="profile-admin-badge" hidden>Admin</span>
-
       <div class="uploader__progress-track" id="perfil-avatar-track" hidden style="width:180px;margin:10px auto 0">
         <div id="perfil-avatar-bar" class="uploader__progress-bar"></div>
       </div>
       <p id="perfil-avatar-status" class="profile-status"></p>
-
       <div class="profile-stats">
         <div class="profile-stat">
           <span id="perfil-stat-conf"  class="profile-stat__value">—</span>
@@ -248,8 +238,11 @@
           <span id="perfil-stat-likes" class="profile-stat__value">—</span>
           <span class="profile-stat__label">Likes</span>
         </div>
+        <div class="profile-stat">
+          <span id="perfil-stat-views" class="profile-stat__value">—</span>
+          <span class="profile-stat__label">Vistas</span>
+        </div>
       </div>
-
       <div class="profile-actions">
         <button id="perfil-signout-btn" class="profile-signout-btn" type="button">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
@@ -260,12 +253,27 @@
       </div>
     </div>
 
+    <div class="perfil-bio-wrap">
+      <p class="perfil-bio-label">Bio</p>
+      <textarea id="perfil-bio-input" placeholder="Cuéntanos algo sobre ti…" maxlength="200" rows="3"></textarea>
+    </div>
+
+    <div class="perfil-private-row">
+      <div>
+        <p class="perfil-private-label">Perfil privado</p>
+        <p class="perfil-private-desc">Tus confesiones no aparecen en el feed público</p>
+      </div>
+      <label class="toggle-switch" aria-label="Activar perfil privado">
+        <input type="checkbox" id="perfil-private-toggle" />
+        <span class="toggle-switch__track"></span>
+      </label>
+    </div>
+
     <div class="chat-divider" style="padding:0 16px;margin:0 0 4px">
       <div class="chat-divider__line"></div>
       <span class="chat-divider__label">Mis confesiones</span>
       <div class="chat-divider__line"></div>
     </div>
-
     <div id="perfil-feed" class="feed-scroll" style="flex:none;overflow-y:visible;padding-bottom:40px;gap:8px">
       <p class="feed-empty">Cargando…</p>
     </div>
@@ -286,18 +294,41 @@
     <h2 class="app-header__title">Administración</h2>
     <div style="min-width:38px"></div>
   </header>
-
   <div class="admin-tabs">
-    <button id="admin-tab-users"  class="admin-tab active" type="button">Usuarios</button>
-    <button id="admin-tab-create" class="admin-tab"        type="button">Crear Usuario</button>
+    <button id="admin-tab-dashboard" class="admin-tab active" type="button">Dashboard</button>
+    <button id="admin-tab-users"     class="admin-tab"        type="button">Usuarios</button>
+    <button id="admin-tab-create"    class="admin-tab"        type="button">Crear</button>
+    <button id="admin-tab-log"       class="admin-tab"        type="button">Log</button>
   </div>
-
-  <div id="admin-panel-users" class="admin-panel active">
+  <div id="admin-panel-dashboard" class="admin-panel active">
+    <div class="admin-dashboard-stats">
+      <div class="admin-stat-box">
+        <div id="admin-stat-confessions" class="admin-stat-box__value">—</div>
+        <div class="admin-stat-box__label">Confesiones</div>
+      </div>
+      <div class="admin-stat-box">
+        <div id="admin-stat-users" class="admin-stat-box__value">—</div>
+        <div class="admin-stat-box__label">Usuarios</div>
+      </div>
+      <div class="admin-stat-box">
+        <div id="admin-stat-comments" class="admin-stat-box__value">—</div>
+        <div class="admin-stat-box__label">Comentarios</div>
+      </div>
+    </div>
+    <div class="admin-chart-wrap">
+      <p class="admin-chart-title">Actividad — últimos 14 días</p>
+      <div id="admin-activity-chart"></div>
+    </div>
+  </div>
+  <div id="admin-panel-users" class="admin-panel">
+    <div class="admin-search-wrap">
+      <input id="admin-user-search" type="search" placeholder="Buscar por nombre…" autocomplete="off" />
+    </div>
+    <div id="admin-user-search-results"></div>
     <div id="admin-user-list" class="admin-user-list">
       <p class="admin-loading">Cargando…</p>
     </div>
   </div>
-
   <div id="admin-panel-create" class="admin-panel">
     <form id="admin-create-form" class="admin-create-form" novalidate>
       <div class="admin-field">
@@ -320,9 +351,71 @@
       <button type="submit" class="admin-submit-btn">Crear Usuario</button>
     </form>
   </div>
+  <div id="admin-panel-log" class="admin-panel">
+    <div id="admin-log-list">
+      <p class="admin-loading">Cargando…</p>
+    </div>
+  </div>
 </div>
 
 
+<!-- ═══════════════════════════════════════════════════════════
+     VISTA: NOTIFICACIONES
+════════════════════════════════════════════════════════════════ -->
+<div id="view-notificaciones" class="view" hidden>
+  <header class="app-header">
+    <button id="notif-back-btn" class="app-header__back" type="button" aria-label="Volver">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+      </svg>
+    </button>
+    <h2 class="app-header__title">Notificaciones</h2>
+    <button id="notif-mark-read-btn" type="button" style="padding:8px 10px;font-size:0.75rem">Marcar todo leído</button>
+  </header>
+  <div id="notif-list" style="overflow-y:auto;flex:1;">
+    <p class="feed-empty">Cargando…</p>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     VISTA: BUSCAR
+════════════════════════════════════════════════════════════════ -->
+<div id="view-buscar" class="view" hidden>
+  <header class="buscar-header app-header" style="padding:0">
+    <button id="buscar-back-btn" class="app-header__back" type="button" aria-label="Volver" style="flex-shrink:0">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+      </svg>
+    </button>
+    <input id="buscar-input" type="search" placeholder="Buscar confesiones…" autocomplete="off" aria-label="Buscar confesiones" />
+  </header>
+  <div id="buscar-results" style="overflow-y:auto;flex:1;"></div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     VISTA: EXPLORAR
+════════════════════════════════════════════════════════════════ -->
+<div id="view-explorar" class="view" hidden>
+  <header class="app-header">
+    <button id="explorar-back-btn" class="app-header__back" type="button" aria-label="Volver">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+      </svg>
+    </button>
+    <h2 class="app-header__title">Explorar</h2>
+    <div style="min-width:44px"></div>
+  </header>
+  
+  <div style="overflow-y:auto;flex:1;">
+    <p class="explorar-section-title">🔥 En tendencia esta semana</p>
+    <div id="explorar-trending"></div>
+    
+    <p class="explorar-section-title">Confesiones recientes</p>
+    <div id="explorar-feed"></div>
+  </div>
+</div>
 
 <!-- ═══════════════════════════════════════════════════════════
      BOTTOM SHEET: Opciones de usuario
@@ -346,6 +439,28 @@
         </svg>
         <span>Mi Perfil y Foto</span>
       </button>
+
+      <button id="sheet-buscar" class="profile-sheet__item profile-sheet__item--btn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:20px;height:20px">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+        </svg>
+        <span>Buscar</span>
+      </button>
+
+      <button id="sheet-explorar" class="profile-sheet__item profile-sheet__item--btn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:20px;height:20px">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253M3 12a8.959 8.959 0 00.284 2.253"/>
+        </svg>
+        <span>Explorar</span>
+      </button>
+
+      <button id="sheet-notif" class="profile-sheet__item profile-sheet__item--btn" type="button" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:20px;height:20px">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
+        </svg>
+        <span>Notificaciones</span>
+      </button>
+
       <button id="sheet-admin" class="profile-sheet__item profile-sheet__item--btn" type="button" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:20px;height:20px">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
@@ -360,38 +475,42 @@
 </div>
 
 
-<!-- ── Scripts ────────────────────────────────────────────────── -->
+
+<!-- ── Scripts ─────────────────────────────────────────────────-->
 <script type="module">
-  import { initFeed, switchView }                from './js/feed.js';
+  import { initFeed, switchView }           from './js/feed.js';
   import { getCurrentUser, getProfile,
            renderHeaderChip, onAuthStateChange,
-           signOut }                             from './js/auth.js';
-  import { getInitials }                         from './js/utils.js';
-  import { initAdmin, openAdmin }                from './js/admin.js';
-  import { initPerfil, openPerfil }              from './js/perfil.js';
+           signOut }                        from './js/auth.js';
+  import { getInitials }                    from './js/utils.js';
+  import { initAdmin, openAdmin }           from './js/admin.js';
+  import { initPerfil, openPerfil }         from './js/perfil.js';
   import { initHilos, openHilos,
-           updateHilosCount }                    from './js/hilos.js';
-  import { routerPush, routerBack }              from './js/router.js';
+           updateHilosCount }               from './js/hilos.js';
+  import { routerPush, routerBack }         from './js/router.js';
 
-  // ── SPA: mostrar login sin navegar a otro archivo ────────────
+  // ── Abrir chat desde vistas externas ─────────────────────────
+  async function openChatFromConfession(confession) {
+    switchView('chat');
+    const { openChat } = await import('./js/chat.js');
+    await openChat(confession);
+  }
+
+  // ── Login SPA ─────────────────────────────────────────────────
   async function showLogin() {
-    // Ocultar toda la UI del feed
     document.querySelectorAll('body > div').forEach(d => d.hidden = true);
-    // Cargar e iniciar el módulo de login (renderiza su propio HTML)
-    const { default: _ } = await import('./js/login.js').catch(() => {});
+    await import('./js/login.js').catch(() => {});
   }
   window.__showLogin = showLogin;
 
   const isGuest = sessionStorage.getItem('rc_guest') === '1';
 
+  // ── Tema ──────────────────────────────────────────────────────
   const savedTheme = localStorage.getItem('rc_theme') || 'dark';
   applyTheme(savedTheme);
-
   document.getElementById('theme-btn').addEventListener('click', () => {
-    const current = document.documentElement.getAttribute('data-theme');
-    applyTheme(current === 'dark' ? 'light' : 'dark');
+    applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
   });
-
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('rc_theme', theme);
@@ -399,6 +518,7 @@
     document.getElementById('theme-icon-light').hidden = theme === 'dark';
   }
 
+  // ── Profile sheet ─────────────────────────────────────────────
   function openProfileSheet() {
     document.getElementById('profile-sheet')?.classList.add('open');
     document.getElementById('profile-overlay')?.classList.add('open');
@@ -410,6 +530,13 @@
   }
   window.__openProfileSheet  = openProfileSheet;
   window.__closeProfileSheet = closeProfileSheet;
+
+  // Cierra el sheet y luego ejecuta fn tras la transición CSS
+  function closeSheetThen(fn) {
+    closeProfileSheet();
+    // Espera a que el router procese el popstate antes de abrir la siguiente vista
+    setTimeout(fn, 180);
+  }
 
   onAuthStateChange(event => {
     if (event === 'SIGNED_OUT' && !isGuest) showLogin();
@@ -423,8 +550,9 @@
     history.replaceState(null, '', location.pathname);
   }
 
+  // ── Boot ──────────────────────────────────────────────────────
   async function boot() {
-    const user = await getCurrentUser();
+    const user    = await getCurrentUser();
     if (!user && !isGuest) { showLogin(); return; }
 
     const chipSlot = document.getElementById('header-chip');
@@ -449,31 +577,35 @@
     document.getElementById('profile-sheet-handle')?.addEventListener('click', routerBack);
     document.getElementById('profile-overlay')?.addEventListener('click', routerBack);
 
-    document.getElementById('sheet-perfil')?.addEventListener('click', () => {
-      routerBack();
-      setTimeout(openPerfil, 50);
-    });
-
-    if (profile?.is_admin) {
-      const adminBtn = document.getElementById('sheet-admin');
-      adminBtn.hidden = false;
-      adminBtn.addEventListener('click', () => { routerBack(); setTimeout(openAdmin, 50); });
+    function backToFeed() {
+      document.getElementById('view-feed')?.classList.add('active');
     }
 
-    document.getElementById('sheet-signout')?.addEventListener('click', async () => {
-      sessionStorage.removeItem('rc_guest');
-      await signOut();
-      showLogin();
+    // ── Perfil ───────────────────────────────────────────────────
+    document.getElementById('sheet-perfil')?.addEventListener('click', () => {
+      closeSheetThen(openPerfil);
+    });
+    if (user && profile) await initPerfil(user, profile, chipSlot, () => backToFeed());
+
+    // ── Admin ────────────────────────────────────────────────────
+    if (profile?.is_admin) {
+      document.getElementById('sheet-admin').hidden = false;
+      document.getElementById('sheet-admin').addEventListener('click', () => {
+        closeSheetThen(openAdmin);
+      });
+    }
+    initAdmin(() => {
+      const v = document.getElementById('view-admin');
+      v?.classList.remove('active');
+      if (v) v.hidden = true;
+      backToFeed();
     });
 
+    // ── Hilos ─────────────────────────────────────────────────────
     if (user) {
       document.getElementById('hilos-btn').hidden = false;
       document.getElementById('hilos-btn').addEventListener('click', openHilos);
-      await initHilos(user, () => switchView('feed', false), async confession => {
-        switchView('chat');
-        const { openChat } = await import('./js/chat.js');
-        await openChat(confession);
-      });
+      await initHilos(user, () => switchView('feed', false), openChatFromConfession);
       updateHilosCount();
       if (window.__pendingOpen === 'hilos') {
         window.__pendingOpen = null;
@@ -481,14 +613,70 @@
       }
     }
 
-    if (user && profile) await initPerfil(user, profile, chipSlot, () => switchView('feed', false));
-
-    initAdmin(() => {
-      document.getElementById('view-admin').classList.remove('active');
-      document.getElementById('view-admin').hidden = true;
-      document.getElementById('view-feed').classList.add('active');
+    // ── Sign out ──────────────────────────────────────────────────
+    document.getElementById('sheet-signout')?.addEventListener('click', async () => {
+      sessionStorage.removeItem('rc_guest');
+      await signOut();
+      showLogin();
     });
 
+    // ── Buscar — lazy ─────────────────────────────────────────────
+    let buscarMod = null;
+    async function openBuscarView() {
+      if (!buscarMod) {
+        try {
+          buscarMod = await import('./js/buscar.js');
+          buscarMod.initBuscar(() => backToFeed(), openChatFromConfession);
+        } catch(e) { console.warn('[buscar] no disponible', e); return; }
+      }
+      buscarMod.openBuscar();
+    }
+    document.getElementById('sheet-buscar')?.addEventListener('click', () => {
+      closeSheetThen(openBuscarView);
+    });
+
+    // ── Explorar — lazy ───────────────────────────────────────────
+    let explorarMod = null;
+    async function openExplorarView() {
+      if (!explorarMod) {
+        try {
+          explorarMod = await import('./js/explorar.js');
+          explorarMod.initExplorar(() => backToFeed(), openChatFromConfession);
+        } catch(e) { console.warn('[explorar] no disponible', e); return; }
+      }
+      explorarMod.openExplorar();
+    }
+    document.getElementById('sheet-explorar')?.addEventListener('click', () => {
+      closeSheetThen(openExplorarView);
+    });
+
+    // ── Notificaciones — solo logged-in ───────────────────────────
+    if (user) {
+      document.getElementById('notif-btn').hidden   = false;
+      document.getElementById('sheet-notif').hidden = false;
+
+      try {
+        const nc = await import('./js/notifications.js');
+        await nc.initNotifications(document.getElementById('notif-badge'), null);
+      } catch(e) { console.warn('[notifications core] no disponible', e); }
+
+      let notifMod = null;
+      async function openNotifView() {
+        if (!notifMod) {
+          try {
+            notifMod = await import('./js/notificaciones.js');
+            notifMod.initNotificaciones(() => backToFeed());
+          } catch(e) { console.warn('[notificaciones] no disponible', e); return; }
+        }
+        notifMod.openNotificaciones();
+      }
+      document.getElementById('notif-btn').addEventListener('click', openNotifView);
+      document.getElementById('sheet-notif').addEventListener('click', () => {
+        closeSheetThen(openNotifView);
+      });
+    }
+
+    // ── Feed principal ────────────────────────────────────────────
     await initFeed();
   }
 
