@@ -533,7 +533,7 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
 
   // Pin badge
   if (confession.is_pinned) {
-    const pin = el('div', { className: 'rc-card__pin-badge', textContent: '📌 Destacada' });
+    const pin = el('div', { className: 'rc-card__pin-badge', textContent: ' Destacada' });
     card.appendChild(pin);
   }
 
@@ -581,7 +581,7 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
         className: `rc-card__pin${confession.is_pinned ? ' rc-card__pin--active' : ''}`,
         attrs: { type: 'button', 'aria-label': confession.is_pinned ? 'Desanclar' : 'Destacar', title: confession.is_pinned ? 'Desanclar' : 'Destacar' },
       });
-      pinBtn.textContent = '📌';
+      pinBtn.textContent = '♦️';
       pinBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePin(confession.id, card, pinBtn); });
       top.appendChild(pinBtn);
     }
@@ -738,7 +738,7 @@ async function togglePin(confessionId, card, pinBtn) {
   pinBtn.classList.toggle('rc-card__pin--active', !isPinned);
   card.querySelector('.rc-card__pin-badge')?.remove();
   if (!isPinned) {
-    const badge = el('div', { className: 'rc-card__pin-badge', textContent: '📌 Destacada' });
+    const badge = el('div', { className: 'rc-card__pin-badge', textContent: ' Destacada' });
     card.insertBefore(badge, card.firstChild);
   }
   showToast(isPinned ? 'Confesión desanclada.' : 'Confesión destacada.', 'success');
