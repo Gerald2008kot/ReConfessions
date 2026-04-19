@@ -727,8 +727,8 @@
 /* ── patch_chat.css — nuevas clases de chat.js ──────────────── */
 
 /* Reacciones ocultas por defecto */
-.chat-reaction-bar--hidden {
-  display: none;
+.chat-reaction-bar.chat-reaction-bar--hidden {
+  display: none !important;
 }
 
 /* Transición suave al aparecer */
