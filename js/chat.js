@@ -1,5 +1,6 @@
-// js/chat.js  (actualizado)
-// Agregado: reacciones en comentarios (👍❤️😂), reply thread, avatar en comentarios
+// js/chat.js
+// Cambios: reacciones ocultas (long-press 1s), swipe derecha para responder,
+//          quote instantáneo al enviar (optimistic UI), banner reply con SVG
 
 import { sb }                                    from './api.js';
 import { getCurrentUser, getProfile }            from './auth.js';
@@ -21,7 +22,28 @@ let realtimeChannel = null;
 let pollingInterval = null;
 let lastCommentId   = null;
 
+// previewMap global para construir quotes al instante
+let _previewMap = {};
+
 const REACTIONS = ['👍', '❤️', '😂'];
+
+// SVG flecha reply para el banner
+function svgReply(size = 14) {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('viewBox', '0 0 24 24');
+  s.setAttribute('width', String(size));
+  s.setAttribute('height', String(size));
+  s.setAttribute('fill', 'none');
+  s.setAttribute('stroke', 'currentColor');
+  s.setAttribute('stroke-width', '2');
+  s.setAttribute('aria-hidden', 'true');
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('stroke-linecap', 'round');
+  p.setAttribute('stroke-linejoin', 'round');
+  p.setAttribute('d', 'M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3');
+  s.appendChild(p);
+  return s;
+}
 
 // ── Init ─────────────────────────────────────────────────────
 export async function initChat(onBack) {
@@ -44,6 +66,7 @@ export async function openChat(confession) {
   activeConfession = confession;
   lastCommentId    = null;
   _replyTo         = null;
+  _previewMap      = {};
 
   renderConfessionCard(confession);
 
@@ -92,6 +115,7 @@ export function closeChat() {
   stopPolling();
   clearReply();
   activeConfession = null;
+  _previewMap      = {};
   onBackCallback?.();
 }
 
@@ -172,7 +196,6 @@ async function loadComments(confessionId) {
     return;
   }
 
-  // Intentar obtener reply_to_id por separado si falla el select extendido
   let commentsWithReply = data.map(c => ({ ...c, reply_to_id: null }));
   try {
     const { data: extended } = await sb
@@ -183,13 +206,12 @@ async function loadComments(confessionId) {
       const replyMap = Object.fromEntries(extended.map(r => [r.id, r.reply_to_id]));
       commentsWithReply = data.map(c => ({ ...c, reply_to_id: replyMap[c.id] ?? null }));
     }
-  } catch { /* columna no existe aún, ignorar */ }
+  } catch { /* columna no existe aún */ }
 
   const userIds = [...new Set(commentsWithReply.map(c => c.user_id))];
   const { data: profiles } = await sb.from('profiles').select('id, avatar_url, full_name').in('id', userIds);
   const pm = Object.fromEntries((profiles || []).map(p => [p.id, p]));
 
-  // Reacciones
   const commentIds = commentsWithReply.map(c => c.id);
   let reactionMap = {};
   try {
@@ -200,9 +222,10 @@ async function loadComments(confessionId) {
     reactionMap = buildReactionMap(reactionRows || []);
   } catch { /* tabla no existe aún */ }
 
-  const previewMap = Object.fromEntries(commentsWithReply.map(c => [c.id, c.content.slice(0, 60)]));
+  // Poblar previewMap global antes de renderizar
+  _previewMap = Object.fromEntries(commentsWithReply.map(c => [c.id, c.content.slice(0, 60)]));
 
-  commentsWithReply.forEach(c => appendBubble(c, false, pm[c.user_id] || null, reactionMap[c.id] || {}, previewMap));
+  commentsWithReply.forEach(c => appendBubble(c, false, pm[c.user_id] || null, reactionMap[c.id] || {}));
   lastCommentId = commentsWithReply[commentsWithReply.length - 1].id;
   scrollToBottom();
 }
@@ -219,9 +242,12 @@ function buildReactionMap(rows) {
 }
 
 // ── Burbuja ───────────────────────────────────────────────────
-function appendBubble(comment, animate, profile = null, reactions = {}, previewMap = {}) {
+function appendBubble(comment, animate, profile = null, reactions = {}) {
   if (document.getElementById(`bubble-${comment.id}`)) return;
   commentListEl.querySelector('.chat-empty')?.remove();
+
+  // Registrar en previewMap para quotes instantáneos
+  _previewMap[comment.id] = comment.content.slice(0, 60);
 
   const isOwn = currentUser && comment.user_id === currentUser.id;
   const row = el('div', {
@@ -229,7 +255,6 @@ function appendBubble(comment, animate, profile = null, reactions = {}, previewM
     attrs: { id: `bubble-${comment.id}` },
   });
 
-  // Avatar ajeno — con foto de perfil si existe
   if (!isOwn) {
     const av = el('div', { className: 'chat-avatar-sm' });
     if (profile?.avatar_url) {
@@ -244,9 +269,9 @@ function appendBubble(comment, animate, profile = null, reactions = {}, previewM
 
   const wrap = el('div', { className: 'chat-bubble-wrap' });
 
-  // Reply quote
-  if (comment.reply_to_id && previewMap[comment.reply_to_id]) {
-    const quote = el('div', { className: 'chat-reply-quote', textContent: previewMap[comment.reply_to_id] });
+  // Quote de reply — se muestra inmediatamente si hay previewMap disponible
+  if (comment.reply_to_id && _previewMap[comment.reply_to_id]) {
+    const quote = el('div', { className: 'chat-reply-quote', textContent: _previewMap[comment.reply_to_id] });
     wrap.appendChild(quote);
   }
 
@@ -264,20 +289,20 @@ function appendBubble(comment, animate, profile = null, reactions = {}, previewM
   wrap.appendChild(bubble);
   wrap.appendChild(el('span', { className: 'chat-bubble__time', textContent: formatDate(comment.created_at) }));
 
-  // Reacciones
+  // Reacciones — ocultas por defecto, long-press 1s para mostrar/ocultar
   const reactionBar = buildReactionBar(comment.id, reactions);
+  reactionBar.classList.add('chat-reaction-bar--hidden');
   wrap.appendChild(reactionBar);
 
-  // Botón reply
+  // Botón Responder
   if (currentUser) {
     const replyBtn = el('button', { className: 'chat-reply-btn', textContent: 'Responder', attrs: { type: 'button' } });
-    replyBtn.addEventListener('click', () => setReplyTo(comment.id, comment.content));
+    replyBtn.addEventListener('click', (e) => { e.stopPropagation(); setReplyTo(comment.id, comment.content); });
     wrap.appendChild(replyBtn);
   }
 
   row.appendChild(wrap);
 
-  // Avatar propio
   if (isOwn) {
     const av = el('div', { className: 'chat-avatar-sm chat-avatar-sm--own' });
     if (currentProfile?.avatar_url) {
@@ -290,15 +315,83 @@ function appendBubble(comment, animate, profile = null, reactions = {}, previewM
     row.appendChild(av);
   }
 
+  // Long-press 1s sobre la burbuja → toggle reacciones
+  attachLongPress(bubble, () => reactionBar.classList.toggle('chat-reaction-bar--hidden'));
+
+  // Swipe derecha → responder
+  if (currentUser) {
+    attachSwipeReply(row, wrap, () => setReplyTo(comment.id, comment.content));
+  }
+
   commentListEl.appendChild(row);
   if (animate) scrollToBottom();
+}
+
+// ── Long-press helper ─────────────────────────────────────────
+function attachLongPress(target, callback) {
+  let timer = null;
+  let moved = false;
+
+  const start = () => { moved = false; timer = setTimeout(() => { if (!moved) callback(); }, 1000); };
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  const move = () => { moved = true; cancel(); };
+
+  target.addEventListener('touchstart',   start,  { passive: true });
+  target.addEventListener('touchend',     cancel);
+  target.addEventListener('touchmove',    move,   { passive: true });
+  target.addEventListener('mousedown',    start);
+  target.addEventListener('mouseup',      cancel);
+  target.addEventListener('mousemove',    move);
+  target.addEventListener('mouseleave',   cancel);
+  target.addEventListener('contextmenu',  (e) => e.preventDefault());
+}
+
+// ── Swipe derecha para responder ─────────────────────────────
+function attachSwipeReply(row, wrap, onReply) {
+  let startX = 0, startY = 0;
+  let isDragging = false, triggered = false;
+  const THRESHOLD = 60;
+
+  row.addEventListener('touchstart', (e) => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    isDragging = false;
+    triggered = false;
+  }, { passive: true });
+
+  row.addEventListener('touchmove', (e) => {
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    if (!isDragging && Math.abs(dy) > Math.abs(dx)) return; // scroll vertical → ignorar
+    isDragging = true;
+    if (dx <= 0) { wrap.style.transform = ''; return; } // solo a la derecha
+
+    const clamped = Math.min(dx, THRESHOLD + 20);
+    wrap.style.transform  = `translateX(${clamped}px)`;
+    wrap.style.transition = 'none';
+
+    if (dx >= THRESHOLD && !triggered) {
+      triggered = true;
+      wrap.classList.add('chat-bubble-wrap--swipe');
+    } else if (dx < THRESHOLD) {
+      triggered = false;
+      wrap.classList.remove('chat-bubble-wrap--swipe');
+    }
+  }, { passive: true });
+
+  row.addEventListener('touchend', () => {
+    wrap.style.transition = 'transform 0.2s ease';
+    wrap.style.transform  = 'translateX(0)';
+    wrap.classList.remove('chat-bubble-wrap--swipe');
+    if (triggered) onReply();
+    isDragging = false;
+  });
 }
 
 // ── Reacciones ────────────────────────────────────────────────
 function buildReactionBar(commentId, reactions) {
   const bar = el('div', { className: 'chat-reaction-bar' });
 
-  // Emojis existentes con conteo
   REACTIONS.forEach(emoji => {
     const info = reactions[emoji];
     const count = info?.count || 0;
@@ -311,8 +404,10 @@ function buildReactionBar(commentId, reactions) {
     const countEl = el('span', { className: 'chat-reaction-count' });
     countEl.textContent = count > 0 ? `${emoji} ${count}` : emoji;
     btn.appendChild(countEl);
-
-    btn.addEventListener('click', () => toggleReaction(commentId, emoji, btn, countEl, reactions));
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleReaction(commentId, emoji, btn, countEl, reactions);
+    });
     bar.appendChild(btn);
   });
 
@@ -326,8 +421,7 @@ async function toggleReaction(commentId, emoji, btn, countEl, reactions) {
   const userReacted = info.users.includes(currentUser.id);
 
   if (userReacted) {
-    await sb.from('comment_reactions')
-      .delete().match({ comment_id: commentId, user_id: currentUser.id, emoji });
+    await sb.from('comment_reactions').delete().match({ comment_id: commentId, user_id: currentUser.id, emoji });
     info.count = Math.max(0, info.count - 1);
     info.users = info.users.filter(u => u !== currentUser.id);
     btn.classList.remove('chat-reaction-btn--active');
@@ -344,17 +438,26 @@ async function toggleReaction(commentId, emoji, btn, countEl, reactions) {
 // ── Reply ─────────────────────────────────────────────────────
 function setReplyTo(commentId, content) {
   _replyTo = { id: commentId, preview: content.slice(0, 60) };
+
   let banner = document.getElementById('chat-reply-banner');
   if (!banner) {
     banner = el('div', { className: 'chat-reply-banner', attrs: { id: 'chat-reply-banner' } });
-    const previewEl = el('span', { className: 'chat-reply-banner__preview' });
-    const cancelBtn = el('button', { className: 'chat-reply-banner__cancel', textContent: '✕', attrs: { type: 'button', 'aria-label': 'Cancelar respuesta' } });
+
+    const iconWrap = el('span', { className: 'chat-reply-banner__icon' });
+    iconWrap.appendChild(svgReply(14));
+
+    const previewEl  = el('span', { className: 'chat-reply-banner__preview' });
+    const cancelBtn  = el('button', { className: 'chat-reply-banner__cancel', attrs: { type: 'button', 'aria-label': 'Cancelar respuesta' } });
+    cancelBtn.appendChild(Icons.close(12));
     cancelBtn.addEventListener('click', clearReply);
+
+    banner.appendChild(iconWrap);
     banner.appendChild(previewEl);
     banner.appendChild(cancelBtn);
     chatInputBar?.insertBefore(banner, chatInputBar.firstChild);
   }
-  banner.querySelector('.chat-reply-banner__preview').textContent = `↩ ${_replyTo.preview}`;
+
+  banner.querySelector('.chat-reply-banner__preview').textContent = _replyTo.preview;
   banner.hidden = false;
   commentInputEl?.focus();
 }
@@ -368,8 +471,8 @@ function clearReply() {
 // ── Borrar comentario ─────────────────────────────────────────
 async function deleteComment(id, commentUserId) {
   if (!confirm('¿Borrar este comentario?')) return;
-  const isAdmin      = !!currentProfile?.is_admin;
-  const isOwnComment = currentUser?.id === commentUserId;
+  const isAdmin       = !!currentProfile?.is_admin;
+  const isOwnComment  = currentUser?.id === commentUserId;
   const isThreadOwner = !isOwnComment && currentUser?.id === activeConfession?.user_id;
   let error;
   if (isAdmin)            { ({ error } = await sb.rpc('admin_delete_comment', { p_comment_id: id })); }
@@ -386,29 +489,59 @@ async function deleteComment(id, commentUserId) {
 // ── Formulario comentario ─────────────────────────────────────
 function initCommentForm() {
   if (!commentSubmitEl) return;
+
   const send = async () => {
     if (!currentUser || !activeConfession) return;
     const content = commentInputEl.value.trim();
     if (!content) return;
+
+    // Capturar reply antes de limpiar
+    const replySnapshot = _replyTo ? { ..._replyTo } : null;
+
     commentSubmitEl.disabled = true;
+    commentInputEl.value = '';
+    clearReply();
+
+    // Optimistic UI: mostrar burbuja al instante con id temporal
+    const tempId = `temp-${Date.now()}`;
+    const optimistic = {
+      id: tempId,
+      user_id: currentUser.id,
+      content,
+      created_at: new Date().toISOString(),
+      reply_to_id: replySnapshot?.id ?? null,
+    };
+    appendBubble(optimistic, true, currentProfile || null, {});
+
     try {
-      const insertData = {
-        confession_id: activeConfession.id,
-        user_id: currentUser.id,
-        content,
-      };
-      if (_replyTo?.id) insertData.reply_to_id = _replyTo.id;
-      const { error } = await sb.from('comments').insert(insertData);
+      const insertData = { confession_id: activeConfession.id, user_id: currentUser.id, content };
+      if (replySnapshot?.id) insertData.reply_to_id = replySnapshot.id;
+
+      const { data: inserted, error } = await sb.from('comments').insert(insertData).select('id').single();
       if (error) throw new Error(error.message);
-      commentInputEl.value = '';
-      clearReply();
+
+      // Reemplazar id temporal por el real para evitar duplicado en realtime
+      if (inserted?.id) {
+        const tempEl = document.getElementById(`bubble-${tempId}`);
+        if (tempEl) {
+          tempEl.id = `bubble-${inserted.id}`;
+          _previewMap[inserted.id] = content.slice(0, 60);
+          delete _previewMap[tempId];
+        }
+        lastCommentId = inserted.id;
+      }
     } catch (err) {
+      // Revertir burbuja optimista
+      document.getElementById(`bubble-${tempId}`)?.remove();
       showToast(err.message, 'error');
+      commentInputEl.value = content;
+      if (replySnapshot) setReplyTo(replySnapshot.id, replySnapshot.preview);
     } finally {
       commentSubmitEl.disabled = false;
       commentInputEl.focus();
     }
   };
+
   commentSubmitEl.addEventListener('click', send);
   commentInputEl?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
@@ -423,15 +556,21 @@ function startCommentRealtime(confessionId) {
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'comments', filter: `confession_id=eq.${confessionId}` },
         async ({ new: row }) => {
+          // Si ya existe por id real, ignorar
+          if (document.getElementById(`bubble-${row.id}`)) return;
+          // Si hay burbuja temporal propia con el mismo contenido, promoverla
+          if (currentUser && row.user_id === currentUser.id) {
+            const tempEl = [...commentListEl.querySelectorAll('[id^="bubble-temp-"]')]
+              .find(b => b.querySelector('.chat-bubble__text')?.textContent === row.content);
+            if (tempEl) { tempEl.id = `bubble-${row.id}`; lastCommentId = row.id; return; }
+          }
           const { data: p } = await sb.from('profiles').select('id, avatar_url, full_name').eq('id', row.user_id).maybeSingle();
-          appendBubble(row, true, p || null, {}, {});
+          appendBubble(row, true, p || null, {});
           lastCommentId = row.id;
         })
       .on('postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'comments' },
-        ({ old: row }) => {
-          if (row?.id) document.getElementById(`bubble-${row.id}`)?.remove();
-        })
+        ({ old: row }) => { if (row?.id) document.getElementById(`bubble-${row.id}`)?.remove(); })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') stopPolling();
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') startPolling(confessionId);
@@ -460,7 +599,7 @@ function startPolling(confessionId) {
       const userIds = [...new Set(data.map(c => c.user_id))];
       const { data: profiles } = await sb.from('profiles').select('id, avatar_url, full_name').in('id', userIds);
       const pm = Object.fromEntries((profiles || []).map(p => [p.id, p]));
-      data.forEach(c => appendBubble(c, true, pm[c.user_id] || null, {}, {}));
+      data.forEach(c => appendBubble(c, true, pm[c.user_id] || null, {}));
       lastCommentId = data[data.length - 1].id;
     }
   }, 10_000);
