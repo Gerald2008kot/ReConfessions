@@ -1,5 +1,5 @@
-// js/perfil.js  (actualizado)
-// Agregado: editar bio, stats extendidas, modo privado
+// js/perfil.js
+// Vista Mi Perfil — inyecta su HTML la primera vez que se abre
 
 import { sb }                                    from './api.js';
 import { getCurrentUser, getProfile, signOut,
@@ -14,6 +14,104 @@ let _user    = null;
 let _profile = null;
 let _chipSlot = null;
 let _onBack   = null;
+let _mounted  = false;
+
+// ── Inyectar HTML de la vista ────────────────────────────────
+function mountPerfilHTML() {
+  if (_mounted) return;
+  _mounted = true;
+
+  const view = document.createElement('div');
+  view.id = 'view-perfil';
+  view.className = 'view';
+  view.hidden = true;
+  view.innerHTML = `
+  <header class="app-header">
+    <button id="perfil-back-btn" class="app-header__back" type="button" aria-label="Volver">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
+      </svg>
+    </button>
+    <h2 class="app-header__title">Mi Perfil</h2>
+    <div style="min-width:44px"></div>
+  </header>
+  <div style="overflow-y:auto;flex:1;scrollbar-width:none;">
+    <div class="profile-hero">
+      <div class="profile-avatar-wrap">
+        <div class="profile-avatar">
+          <span id="perfil-initials" class="profile-avatar__initials"></span>
+          <img id="perfil-avatar-img" class="profile-avatar__img" alt="Foto de perfil" hidden />
+        </div>
+        <label class="profile-avatar__edit-btn" for="perfil-avatar-input" aria-label="Cambiar foto">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/>
+          </svg>
+        </label>
+        <input type="file" id="perfil-avatar-input" class="uploader__input" accept="image/jpeg,image/png,image/gif,image/webp" />
+      </div>
+      <h2 id="perfil-name"  class="profile-name"></h2>
+      <p  id="perfil-email" class="profile-email"></p>
+      <span id="perfil-admin-badge" class="profile-admin-badge" hidden>Admin</span>
+      <div class="uploader__progress-track" id="perfil-avatar-track" hidden style="width:180px;margin:10px auto 0">
+        <div id="perfil-avatar-bar" class="uploader__progress-bar"></div>
+      </div>
+      <p id="perfil-avatar-status" class="profile-status"></p>
+      <div class="profile-stats">
+        <div class="profile-stat">
+          <span id="perfil-stat-conf"  class="profile-stat__value">—</span>
+          <span class="profile-stat__label">Confesiones</span>
+        </div>
+        <div class="profile-stat">
+          <span id="perfil-stat-cm"    class="profile-stat__value">—</span>
+          <span class="profile-stat__label">Respuestas</span>
+        </div>
+        <div class="profile-stat">
+          <span id="perfil-stat-likes" class="profile-stat__value">—</span>
+          <span class="profile-stat__label">Likes</span>
+        </div>
+        <div class="profile-stat">
+          <span id="perfil-stat-views" class="profile-stat__value">—</span>
+          <span class="profile-stat__label">Vistas</span>
+        </div>
+      </div>
+      <div class="profile-actions">
+        <button id="perfil-signout-btn" class="profile-signout-btn" type="button">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/>
+          </svg>
+          Cerrar Sesión
+        </button>
+      </div>
+    </div>
+
+    <div class="perfil-bio-wrap">
+      <p class="perfil-bio-label">Bio</p>
+      <textarea id="perfil-bio-input" placeholder="Cuéntanos algo sobre ti…" maxlength="200" rows="3"></textarea>
+    </div>
+
+    <div class="perfil-private-row">
+      <div>
+        <p class="perfil-private-label">Perfil privado</p>
+        <p class="perfil-private-desc">Tus confesiones no aparecen en el feed público</p>
+      </div>
+      <label class="toggle-switch" aria-label="Activar perfil privado">
+        <input type="checkbox" id="perfil-private-toggle" />
+        <span class="toggle-switch__track"></span>
+      </label>
+    </div>
+
+    <div class="chat-divider" style="padding:0 16px;margin:0 0 4px">
+      <div class="chat-divider__line"></div>
+      <span class="chat-divider__label">Mis confesiones</span>
+      <div class="chat-divider__line"></div>
+    </div>
+    <div id="perfil-feed" class="feed-scroll" style="flex:none;overflow-y:visible;padding-bottom:40px;gap:8px">
+      <p class="feed-empty">Cargando…</p>
+    </div>
+  </div>`;
+
+  document.getElementById('app-root').appendChild(view);
+}
 
 // ── Init ──────────────────────────────────────────────────────
 export async function initPerfil(user, profile, chipSlot, onBack) {
@@ -21,6 +119,8 @@ export async function initPerfil(user, profile, chipSlot, onBack) {
   _profile  = profile;
   _chipSlot = chipSlot;
   _onBack   = onBack;
+
+  mountPerfilHTML();
 
   document.getElementById('perfil-back-btn')?.addEventListener('click', routerBack);
   document.getElementById('perfil-signout-btn')?.addEventListener('click', async () => {
@@ -31,7 +131,6 @@ export async function initPerfil(user, profile, chipSlot, onBack) {
   const avatarInput = document.getElementById('perfil-avatar-input');
   avatarInput?.addEventListener('change', handleAvatarUpload);
 
-  // Bio — guardar al perder foco o Enter
   const bioInput = document.getElementById('perfil-bio-input');
   if (bioInput) {
     bioInput.addEventListener('blur', () => saveBio(bioInput.value.trim()));
@@ -40,7 +139,6 @@ export async function initPerfil(user, profile, chipSlot, onBack) {
     });
   }
 
-  // Modo privado
   const privateToggle = document.getElementById('perfil-private-toggle');
   if (privateToggle) {
     privateToggle.addEventListener('change', async () => {
@@ -86,11 +184,9 @@ function renderHero(p) {
   document.getElementById('perfil-initials').textContent = getInitials(p.full_name);
   document.getElementById('perfil-admin-badge').hidden   = !p.is_admin;
 
-  // Bio
   const bioInput = document.getElementById('perfil-bio-input');
   if (bioInput) bioInput.value = p.bio || '';
 
-  // Modo privado
   const privateToggle = document.getElementById('perfil-private-toggle');
   if (privateToggle) privateToggle.checked = !!p.is_private;
 
@@ -115,7 +211,7 @@ async function saveBio(bio) {
   showToast('Bio actualizada.', 'success');
 }
 
-// ── Stats extendidas ──────────────────────────────────────────
+// ── Stats ──────────────────────────────────────────────────────
 async function loadStats() {
   const [{ count: c1 }, { count: c2 }] = await Promise.all([
     sb.from('confessions').select('id', { count: 'exact', head: true }).eq('user_id', _user.id),
@@ -148,136 +244,8 @@ async function loadMyConfessions() {
   while (feed.firstChild) feed.removeChild(feed.firstChild);
   feed.appendChild(Object.assign(document.createElement('p'), { className: 'feed-empty', textContent: 'Cargando…' }));
 
-  const { data, error } = await sb
-    .from('confessions')
-    .select('id, user_id, content, image_url, hashtag, created_at')
-    .eq('user_id', _user.id)
-    .order('created_at', { ascending: false })
-    .limit(50);
-
-  while (feed.firstChild) feed.removeChild(feed.firstChild);
-
-  if (error || !data?.length) {
-    feed.appendChild(Object.assign(document.createElement('p'), {
-      className: 'feed-empty',
-      textContent: error ? 'Error al cargar.' : 'Aún no has publicado ninguna confesión.',
-    }));
-    return;
-  }
-
-  const ids = data.map(c => c.id);
-  const [{ data: lk }, { data: cm }, { data: myLikes }] = await Promise.all([
-    sb.from('likes').select('confession_id').in('confession_id', ids),
-    sb.from('comments').select('confession_id').in('confession_id', ids),
-    sb.from('likes').select('confession_id').eq('user_id', _user.id).in('confession_id', ids),
-  ]);
-
-  const likeMap  = countMap(lk,      'confession_id');
-  const cmMap    = countMap(cm,      'confession_id');
-  const likedSet = new Set(myLikes?.map(r => r.confession_id) || []);
-
-  data.forEach(c => feed.appendChild(buildCard(c, likeMap[c.id]||0, cmMap[c.id]||0, likedSet.has(c.id))));
-}
-
-// ── Card ──────────────────────────────────────────────────────
-function buildCard(c, likeCount, commentCount, isLiked) {
-  const card = document.createElement('article');
-  card.className = 'rc-card';
-
-  const top = document.createElement('div');
-  top.className = 'rc-card__top';
-
-  const av = document.createElement('div');
-  av.className = 'rc-card__avatar';
-  if (_profile?.avatar_url) {
-    const img = document.createElement('img');
-    img.src = _profile.avatar_url; img.alt = 'Avatar'; img.loading = 'lazy';
-    av.appendChild(img);
-  } else { av.appendChild(Icons.user(14)); }
-  top.appendChild(av);
-
-  const { bg, fg } = tagColor(c.hashtag || '#Confesión');
-  const pill = document.createElement('span');
-  pill.className = 'rc-card__tag';
-  pill.textContent = c.hashtag || '#Confesión';
-  pill.style.background = bg; pill.style.color = fg;
-  top.appendChild(pill);
-
-  const time = document.createElement('span');
-  time.className = 'rc-card__time';
-  time.textContent = formatDate(c.created_at);
-  top.appendChild(time);
-
-  const del = document.createElement('button');
-  del.className = 'rc-card__del'; del.type = 'button';
-  del.appendChild(Icons.trash(15));
-  del.addEventListener('click', e => { e.stopPropagation(); deleteConfession(c.id, card); });
-  top.appendChild(del);
-  card.appendChild(top);
-
-  const body = document.createElement('div');
-  body.className = 'rc-card__body-row';
-  const text = document.createElement('p');
-  text.className = 'rc-card__text'; text.textContent = c.content;
-  body.appendChild(text);
-
-  if (c.image_url) {
-    const thumb = document.createElement('div');
-    thumb.className = 'rc-card__thumb';
-    const img = document.createElement('img');
-    img.src = c.image_url; img.alt = 'Imagen'; img.loading = 'lazy';
-    img.addEventListener('click', e => { e.stopPropagation(); openImageModal(c.image_url); });
-    thumb.appendChild(img);
-    body.appendChild(thumb);
-  }
-  card.appendChild(body);
-
-  const footer = document.createElement('div');
-  footer.className = 'rc-card__footer';
-
-  const likeBtn = document.createElement('button');
-  likeBtn.className = `rc-card__action${isLiked ? ' rc-card__action--liked' : ''}`;
-  likeBtn.type = 'button';
-  likeBtn.appendChild(Icons.heart(isLiked, 17));
-  const lkSpan = Object.assign(document.createElement('span'), { className: 'rc-card__action-count', textContent: String(likeCount) });
-  likeBtn.appendChild(lkSpan);
-  likeBtn.addEventListener('click', e => { e.stopPropagation(); toggleLike(c.id, likeBtn); });
-  footer.appendChild(likeBtn);
-
-  const cmBtn = document.createElement('button');
-  cmBtn.className = 'rc-card__action'; cmBtn.type = 'button';
-  cmBtn.appendChild(Icons.chat(17));
-  cmBtn.appendChild(Object.assign(document.createElement('span'), { className: 'rc-card__action-count', textContent: String(commentCount) }));
-  footer.appendChild(cmBtn);
-
-  card.appendChild(footer);
-  return card;
-}
-
-async function toggleLike(cid, btn) {
-  const liked = btn.classList.contains('rc-card__action--liked');
-  const sp    = btn.querySelector('.rc-card__action-count');
-  const n     = parseInt(sp.textContent) || 0;
-  const swap  = f => { const o = btn.querySelector('svg'); if (o) btn.replaceChild(Icons.heart(f, 17), o); };
-  if (liked) {
-    btn.classList.remove('rc-card__action--liked'); swap(false); sp.textContent = String(n - 1);
-    await sb.from('likes').delete().match({ confession_id: cid, user_id: _user.id });
-  } else {
-    btn.classList.add('rc-card__action--liked'); swap(true); sp.textContent = String(n + 1);
-    btn.classList.add('rc-card__action--pop');
-    btn.addEventListener('animationend', () => btn.classList.remove('rc-card__action--pop'), { once: true });
-    await sb.from('likes').insert({ confession_id: cid, user_id: _user.id });
-  }
-}
-
-async function deleteConfession(id, cardEl) {
-  if (!confirm('¿Borrar esta confesión? No se puede deshacer.')) return;
-  const { error } = await sb.from('confessions').delete().eq('id', id).eq('user_id', _user.id);
-  if (error) { showToast(error.message, 'error'); return; }
-  cardEl.remove();
-  const s = document.getElementById('perfil-stat-conf');
-  s.textContent = Math.max(0, parseInt(s.textContent) - 1);
-  showToast('Confesión eliminada.', 'success');
+  const { loadConfessions } = await import('./feed.js');
+  await loadConfessions(feed, _user.id);
 }
 
 // ── Avatar upload ─────────────────────────────────────────────
@@ -285,53 +253,34 @@ async function handleAvatarUpload(e) {
   const file = e.target.files?.[0];
   if (!file) return;
 
-  const track      = document.getElementById('perfil-avatar-track');
-  const bar        = document.getElementById('perfil-avatar-bar');
-  const status     = document.getElementById('perfil-avatar-status');
-  const avatarWrap = document.querySelector('.profile-avatar-wrap');
-
-  avatarWrap?.classList.add('profile-avatar-wrap--loading');
-  track.hidden = false; bar.style.width = '0%'; status.textContent = 'Subiendo…';
+  const track  = document.getElementById('perfil-avatar-track');
+  const bar    = document.getElementById('perfil-avatar-bar');
+  const status = document.getElementById('perfil-avatar-status');
+  if (track) track.hidden = false;
+  if (status) status.textContent = 'Subiendo…';
 
   try {
-    const url = await uploadImage(file, pct => { bar.style.width = pct + '%'; });
-    const { error } = await sb.from('profiles').update({ avatar_url: url }).eq('id', _user.id);
+    const url = await uploadImage(file, (pct) => {
+      if (bar) bar.style.width = `${pct}%`;
+    });
+
+    const { error } = await sb.from('profiles')
+      .update({ avatar_url: url })
+      .eq('id', _user.id);
+
     if (error) throw new Error(error.message);
 
-    const cacheBustedUrl = `${url}${url.includes('?') ? '&' : '?'}_t=${Date.now()}`;
     _profile = { ..._profile, avatar_url: url };
-
-    const heroImg = document.getElementById('perfil-avatar-img');
-    if (heroImg) { heroImg.src = cacheBustedUrl; heroImg.hidden = false; }
-    document.getElementById('perfil-initials').hidden = true;
-
-    renderHeaderChip(_chipSlot, _profile, () => window.location.replace('./login.html'));
-    status.textContent = '✓ Foto actualizada';
-    setTimeout(() => { status.textContent = ''; }, 3000);
+    renderHero(_profile);
+    if (_chipSlot) renderHeaderChip(_chipSlot, _profile, () => {});
+    if (status) status.textContent = '¡Foto actualizada!';
+    setTimeout(() => { if (status) status.textContent = ''; }, 3000);
   } catch (err) {
-    showToast(err.message, 'error'); status.textContent = '';
+    showToast(err.message, 'error');
+    if (status) status.textContent = '';
   } finally {
-    avatarWrap?.classList.remove('profile-avatar-wrap--loading');
-    track.hidden = true; bar.style.width = '0%';
-    document.getElementById('perfil-avatar-input').value = '';
+    if (track) track.hidden = true;
+    if (bar)   bar.style.width = '0%';
+    e.target.value = '';
   }
-}
-
-// ── Image modal ───────────────────────────────────────────────
-function openImageModal(url) {
-  document.getElementById('img-modal')?.remove();
-  const overlay = document.createElement('div');
-  overlay.id = 'img-modal'; overlay.className = 'img-modal';
-  const img = document.createElement('img');
-  img.src = url; img.className = 'img-modal__img'; img.alt = 'Imagen';
-  const btn = document.createElement('button');
-  btn.className = 'img-modal__close'; btn.type = 'button';
-  btn.appendChild(Icons.close(20));
-  const close = () => overlay.remove();
-  btn.addEventListener('click', close);
-  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); }, { once: true });
-  overlay.appendChild(btn); overlay.appendChild(img);
-  document.body.appendChild(overlay);
-  requestAnimationFrame(() => overlay.classList.add('img-modal--open'));
 }
