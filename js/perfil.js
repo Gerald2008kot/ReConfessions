@@ -1,5 +1,5 @@
 // js/perfil.js
-// Vista Mi Perfil — inyecta su HTML la primera vez que se abre
+// Vista Mi Perfil — con contador de Seguidores y banner de Suspensión
 
 import { sb }                                    from './api.js';
 import { getCurrentUser, getProfile, signOut,
@@ -16,7 +16,7 @@ let _chipSlot = null;
 let _onBack   = null;
 let _mounted  = false;
 
-// ── Inyectar HTML de la vista ────────────────────────────────
+// ── Montar HTML ───────────────────────────────────────────────
 function mountPerfilHTML() {
   if (_mounted) return;
   _mounted = true;
@@ -35,6 +35,18 @@ function mountPerfilHTML() {
     <h2 class="app-header__title">Mi Perfil</h2>
     <div style="min-width:44px"></div>
   </header>
+
+  <!-- Banner de suspensión -->
+  <div id="perfil-suspension-banner" class="suspension-banner" hidden>
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+    </svg>
+    <div>
+      <strong>Tu cuenta está suspendida</strong>
+      <p id="perfil-suspension-detail" style="margin:2px 0 0;font-size:0.78rem;opacity:0.85"></p>
+    </div>
+  </div>
+
   <div style="overflow-y:auto;flex:1;scrollbar-width:none;">
     <div class="profile-hero">
       <div class="profile-avatar-wrap">
@@ -56,24 +68,31 @@ function mountPerfilHTML() {
         <div id="perfil-avatar-bar" class="uploader__progress-bar"></div>
       </div>
       <p id="perfil-avatar-status" class="profile-status"></p>
+
+      <!-- Stats con Seguidores añadidos -->
       <div class="profile-stats">
         <div class="profile-stat">
-          <span id="perfil-stat-conf"  class="profile-stat__value">—</span>
+          <span id="perfil-stat-conf"      class="profile-stat__value">—</span>
           <span class="profile-stat__label">Confesiones</span>
         </div>
         <div class="profile-stat">
-          <span id="perfil-stat-cm"    class="profile-stat__value">—</span>
+          <span id="perfil-stat-cm"        class="profile-stat__value">—</span>
           <span class="profile-stat__label">Respuestas</span>
         </div>
         <div class="profile-stat">
-          <span id="perfil-stat-likes" class="profile-stat__value">—</span>
+          <span id="perfil-stat-likes"     class="profile-stat__value">—</span>
           <span class="profile-stat__label">Likes</span>
         </div>
         <div class="profile-stat">
-          <span id="perfil-stat-views" class="profile-stat__value">—</span>
+          <span id="perfil-stat-followers" class="profile-stat__value">—</span>
+          <span class="profile-stat__label">Seguidores</span>
+        </div>
+        <div class="profile-stat">
+          <span id="perfil-stat-views"     class="profile-stat__value">—</span>
           <span class="profile-stat__label">Vistas</span>
         </div>
       </div>
+
       <div class="profile-actions">
         <button id="perfil-signout-btn" class="profile-signout-btn" type="button">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
@@ -91,8 +110,8 @@ function mountPerfilHTML() {
 
     <div class="perfil-private-row">
       <div>
-        <p class="perfil-private-label">Perfil privado</p>
-        <p class="perfil-private-desc">Tus confesiones no aparecen en el feed público</p>
+        <p class="perfil-private-label">Ocultar publicaciones</p>
+        <p class="perfil-private-desc">Tus confesiones desaparecen del feed público, pero siguen siendo accesibles por enlace directo</p>
       </div>
       <label class="toggle-switch" aria-label="Activar perfil privado">
         <input type="checkbox" id="perfil-private-toggle" />
@@ -128,8 +147,7 @@ export async function initPerfil(user, profile, chipSlot, onBack) {
     window.location.replace('./login.html');
   });
 
-  const avatarInput = document.getElementById('perfil-avatar-input');
-  avatarInput?.addEventListener('change', handleAvatarUpload);
+  document.getElementById('perfil-avatar-input')?.addEventListener('change', handleAvatarUpload);
 
   const bioInput = document.getElementById('perfil-bio-input');
   if (bioInput) {
@@ -147,7 +165,7 @@ export async function initPerfil(user, profile, chipSlot, onBack) {
         .eq('id', _user.id);
       if (error) { showToast(error.message, 'error'); privateToggle.checked = !privateToggle.checked; return; }
       _profile = { ..._profile, is_private: privateToggle.checked };
-      showToast(privateToggle.checked ? 'Perfil privado activado.' : 'Perfil privado desactivado.', 'success');
+      showToast(privateToggle.checked ? 'Publicaciones ocultadas del feed.' : 'Publicaciones visibles en el feed.', 'success');
     });
   }
 }
@@ -164,6 +182,7 @@ export async function openPerfil() {
   renderHero(_profile);
   loadStats();
   loadMyConfessions();
+  _checkSuspension();
 }
 
 function _closePerfilUI() {
@@ -176,10 +195,38 @@ function _closePerfilUI() {
 
 export function closePerfil() { _closePerfilUI(); }
 
+// ── Banner de suspensión ──────────────────────────────────────
+async function _checkSuspension() {
+  if (!_user) return;
+  const { data } = await sb
+    .from('profiles')
+    .select('suspended_until, suspension_reason')
+    .eq('id', _user.id)
+    .single();
+
+  const banner = document.getElementById('perfil-suspension-banner');
+  const detail = document.getElementById('perfil-suspension-detail');
+  if (!banner) return;
+
+  if (data?.suspended_until && new Date(data.suspended_until) > new Date()) {
+    const until = new Date(data.suspended_until);
+    const diff  = Math.max(0, until - Date.now());
+    banner.hidden = false;
+    if (detail) {
+      detail.textContent = `Motivo: ${data.suspension_reason || 'Sin especificar'} · Expira en ${_fmtDiff(diff)}`;
+    }
+    // Actualizar _profile con estado de suspensión
+    _profile = { ..._profile, suspended_until: data.suspended_until, suspension_reason: data.suspension_reason };
+  } else {
+    banner.hidden = true;
+  }
+}
+
 // ── Hero ──────────────────────────────────────────────────────
 function renderHero(p) {
   if (!p) return;
-  document.getElementById('perfil-name').textContent     = p.full_name;
+  const alias = p.reg_number ? `Anonymous_${p.reg_number}` : (p.full_name || 'Anonymous');
+  document.getElementById('perfil-name').textContent     = alias;
   document.getElementById('perfil-email').textContent    = _user.email;
   document.getElementById('perfil-initials').textContent = getInitials(p.full_name);
   document.getElementById('perfil-admin-badge').hidden   = !p.is_admin;
@@ -192,8 +239,7 @@ function renderHero(p) {
 
   const img = document.getElementById('perfil-avatar-img');
   if (p.avatar_url) {
-    img.src = p.avatar_url;
-    img.hidden = false;
+    img.src = p.avatar_url; img.hidden = false;
     document.getElementById('perfil-initials').hidden = true;
   } else {
     img.hidden = true;
@@ -211,14 +257,16 @@ async function saveBio(bio) {
   showToast('Bio actualizada.', 'success');
 }
 
-// ── Stats ──────────────────────────────────────────────────────
+// ── Stats (incluye seguidores) ────────────────────────────────
 async function loadStats() {
-  const [{ count: c1 }, { count: c2 }] = await Promise.all([
+  const [{ count: c1 }, { count: c2 }, { count: followers }] = await Promise.all([
     sb.from('confessions').select('id', { count: 'exact', head: true }).eq('user_id', _user.id),
     sb.from('comments').select('id',    { count: 'exact', head: true }).eq('user_id', _user.id),
+    sb.from('follows').select('id',     { count: 'exact', head: true }).eq('following_id', _user.id),
   ]);
-  document.getElementById('perfil-stat-conf').textContent = c1 ?? 0;
-  document.getElementById('perfil-stat-cm').textContent   = c2 ?? 0;
+  document.getElementById('perfil-stat-conf').textContent      = c1 ?? 0;
+  document.getElementById('perfil-stat-cm').textContent        = c2 ?? 0;
+  document.getElementById('perfil-stat-followers').textContent = followers ?? 0;
 
   const { data: myIds } = await sb.from('confessions').select('id').eq('user_id', _user.id);
   const ids = myIds?.map(r => r.id) || [];
@@ -243,7 +291,6 @@ async function loadMyConfessions() {
   const feed = document.getElementById('perfil-feed');
   while (feed.firstChild) feed.removeChild(feed.firstChild);
   feed.appendChild(Object.assign(document.createElement('p'), { className: 'feed-empty', textContent: 'Cargando…' }));
-
   const { loadConfessions } = await import('./feed.js');
   await loadConfessions(feed, _user.id);
 }
@@ -252,24 +299,15 @@ async function loadMyConfessions() {
 async function handleAvatarUpload(e) {
   const file = e.target.files?.[0];
   if (!file) return;
-
   const track  = document.getElementById('perfil-avatar-track');
   const bar    = document.getElementById('perfil-avatar-bar');
   const status = document.getElementById('perfil-avatar-status');
   if (track) track.hidden = false;
   if (status) status.textContent = 'Subiendo…';
-
   try {
-    const url = await uploadImage(file, (pct) => {
-      if (bar) bar.style.width = `${pct}%`;
-    });
-
-    const { error } = await sb.from('profiles')
-      .update({ avatar_url: url })
-      .eq('id', _user.id);
-
+    const url = await uploadImage(file, (pct) => { if (bar) bar.style.width = `${pct}%`; });
+    const { error } = await sb.from('profiles').update({ avatar_url: url }).eq('id', _user.id);
     if (error) throw new Error(error.message);
-
     _profile = { ..._profile, avatar_url: url };
     renderHero(_profile);
     if (_chipSlot) renderHeaderChip(_chipSlot, _profile, () => {});
@@ -283,4 +321,17 @@ async function handleAvatarUpload(e) {
     if (bar)   bar.style.width = '0%';
     e.target.value = '';
   }
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function _fmtDiff(ms) {
+  if (ms <= 0) return 'expirada';
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  const d = Math.floor(h / 24);
+  if (d > 0) return `${d}d ${h % 24}h`;
+  if (h > 0) return `${h}h ${m % 60}m`;
+  if (m > 0) return `${m}m`;
+  return `${s}s`;
 }
