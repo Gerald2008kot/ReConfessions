@@ -8,27 +8,23 @@ import { getInitials, showToast, el } from './utils.js';
 
 // ── Session helpers ────────────────────────────────────────
 
-/** Returns the current Supabase session (or null). */
 export async function getSession() {
   const { data: { session } } = await sb.auth.getSession();
   return session;
 }
 
-/** Returns the current user object (or null). */
 export async function getCurrentUser() {
   const session = await getSession();
   return session?.user ?? null;
 }
 
 /**
- * Fetches the profile row for a given user ID.
- * @param {string} userId
- * @returns {Object|null}
+ * Obtiene el perfil del usuario con los nuevos campos (reg_number, suspended_until, bio, is_private).
  */
 export async function getProfile(userId) {
   const { data, error } = await sb
     .from('profiles')
-    .select('id, full_name, avatar_url, is_admin')
+    .select('id, full_name, avatar_url, is_admin, reg_number, bio, is_private, suspended_until, suspension_reason')
     .eq('id', userId)
     .single();
 
@@ -41,49 +37,27 @@ export async function getProfile(userId) {
 
 // ── Auth actions ───────────────────────────────────────────
 
-/**
- * Creates a new account.
- * The trigger in Supabase creates the profile row automatically.
- * @param {string} email
- * @param {string} password
- * @param {string} fullName
- */
 export async function signUp(email, password, fullName) {
   const { data, error } = await sb.auth.signUp({
     email,
     password,
-    options: {
-      data: { full_name: fullName },
-    },
+    options: { data: { full_name: fullName } },
   });
-
   if (error) throw new Error(error.message);
   return data;
 }
 
-/**
- * Signs in with email + password.
- * @param {string} email
- * @param {string} password
- */
 export async function signIn(email, password) {
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if (error) throw new Error(error.message);
   return data;
 }
 
-/** Signs out the current user. */
 export async function signOut() {
   const { error } = await sb.auth.signOut();
   if (error) throw new Error(error.message);
 }
 
-// ── Session state observer ─────────────────────────────────
-
-/**
- * Subscribes to auth state changes and calls the callback.
- * @param {Function} callback  (event, session) => void
- */
 export function onAuthStateChange(callback) {
   return sb.auth.onAuthStateChange(callback);
 }
@@ -91,74 +65,67 @@ export function onAuthStateChange(callback) {
 // ── Header chip renderer ───────────────────────────────────
 
 /**
- * Renders the user chip in the site header.
- * Shows avatar if available, else initials circle.
- * @param {HTMLElement} container  - The header chip slot element
- * @param {Object|null} profile    - Profile from getProfile()
- * @param {Function}    onSignOut  - Callback for sign-out click
+ * Renderiza el chip de sesión en el header.
+ * - Modo invitado: el chip NO abre el sheet de perfil; dispara directamente login.
+ * - Usuario suspendido: el avatar tiene borde rojo.
  */
 export function renderHeaderChip(container, profile, onSignOut) {
   while (container.firstChild) container.removeChild(container.firstChild);
 
   if (!profile) {
-    // ¿Es modo invitado o simplemente no autenticado?
     const isGuest = sessionStorage.getItem('rc_guest') === '1';
 
     if (isGuest) {
-      // Chip de invitado con botón para ir a login
-      const guestChip = el('div', { className: 'chip chip--user' });
+      // Chip de invitado — clic directo a login, sin abrir sheet
+      const guestChip = el('div', { className: 'chip chip--user chip--guest' });
 
-      const icon = el('span', {
-        className:   'chip__initials',
-        textContent: '👁',
-        attrs:       { title: 'Guest mode', 'aria-label': 'Guest' },
+      const icon = el('button', {
+        className: 'chip__profile-link',
+        attrs:     { type: 'button', title: 'Iniciar sesión', 'aria-label': 'Iniciar sesión' },
       });
-      icon.style.background = 'rgba(255,255,255,0.06)';
-      icon.style.fontSize   = '1rem';
-
-      const badge = el('span', {
-        className:   'chip__badge chip__badge--guest',
-        textContent: 'Guest',
-      });
-
-      const loginBtn = el('a', {
-        className:   'chip__signout',
-        textContent: '→',
-        attrs:       { href: '#', title: 'Sign in', 'aria-label': 'Sign in' },
-      });
-      loginBtn.addEventListener('click', (e) => {
-        e.preventDefault();
+      icon.innerHTML = `<span class="chip__initials chip__initials--guest" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+      </span>`;
+      // BUG FIX: modo invitado → clic SIEMPRE va a login, no al sheet de perfil
+      icon.addEventListener('click', () => {
         if (typeof window.__showLogin === 'function') window.__showLogin();
+        else window.location.href = './login.html';
       });
+
+      const badge = el('span', { className: 'chip__badge chip__badge--guest', textContent: 'Invitado' });
 
       guestChip.appendChild(icon);
-      guestChip.appendChild(badge);
-      guestChip.appendChild(loginBtn);
+   // guestChip.appendChild(badge);
       container.appendChild(guestChip);
     } else {
-      // No autenticado, sin modo invitado → enlace a login
-      const loginLink = el('a', {
-        className:   'chip chip--login',
-        textContent: 'Sign in',
-        attrs:       { href: '#' },
+      // No autenticado sin modo invitado
+      const loginLink = el('button', {
+        className: 'chip chip--login',
+        attrs:     { type: 'button' },
+        textContent: 'Iniciar sesión',
       });
-      loginLink.addEventListener('click', (e) => {
-        e.preventDefault();
+      loginLink.addEventListener('click', () => {
         if (typeof window.__showLogin === 'function') window.__showLogin();
+        else window.location.href = './login.html';
       });
       container.appendChild(loginLink);
     }
     return;
   }
 
-  // Avatar or initials
+  // ── Usuario autenticado ────────────────────────────────────
+  const isSuspended = profile.suspended_until && new Date(profile.suspended_until) > new Date();
+
+  // Avatar o iniciales
   let avatarNode;
   if (profile.avatar_url) {
     avatarNode = el('img', {
       className: 'chip__avatar',
       attrs: {
-        src:   profile.avatar_url,
-        alt:   'Profile picture',
+        src:     profile.avatar_url,
+        alt:     'Foto de perfil',
         loading: 'lazy',
       },
     });
@@ -174,29 +141,14 @@ export function renderHeaderChip(container, profile, onSignOut) {
     ? el('span', { className: 'chip__badge chip__badge--admin', textContent: 'Admin' })
     : null;
 
-  // Sign-out button
-  const signOutBtn = el('button', {
-    className:   'chip__signout',
-    textContent: '⏻',
-    attrs:       { type: 'button', title: 'Sign out', 'aria-label': 'Sign out' },
-  });
-  signOutBtn.addEventListener('click', async () => {
-    try {
-      await signOut();
-      onSignOut?.();
-    } catch (err) {
-      showToast(err.message, 'error');
-    }
-  });
-
-  // Clic en el avatar abre el bottom sheet de perfil (o llama onSignOut si no hay sheet)
+  // Botón de perfil (clic abre sheet)
   const profileBtn = el('button', {
-    className: 'chip__profile-link',
+    className: `chip__profile-link${isSuspended ? ' chip__profile-link--suspended' : ''}`,
     attrs:     { type: 'button', title: 'Mi perfil', 'aria-label': 'Abrir perfil' },
     children:  [avatarNode],
   });
+  // Usuarios suspendidos pueden abrir su perfil para ver el banner
   profileBtn.addEventListener('click', () => {
-    // Si existe la función global del sheet (index.html), la usamos
     if (typeof window.__openProfileSheet === 'function') {
       window.__openProfileSheet();
     } else {
@@ -205,21 +157,15 @@ export function renderHeaderChip(container, profile, onSignOut) {
   });
 
   const chip = el('div', {
-    className: `chip chip--user${profile.is_admin ? ' chip--admin' : ''}`,
+    className: `chip chip--user${profile.is_admin ? ' chip--admin' : ''}${isSuspended ? ' chip--suspended' : ''}`,
     children:  [profileBtn, adminBadge],
   });
 
   container.appendChild(chip);
 }
 
-// ── Auth form logic (used in login.html) ──────────────────
+// ── Auth form logic ────────────────────────────────────────
 
-/**
- * Wires up the login/signup form.
- * Expects: #auth-form, #tab-login, #tab-signup, #auth-email,
- *          #auth-password, #auth-name, #auth-name-group,
- *          #auth-submit, #auth-error
- */
 export function initAuthForm() {
   const form       = document.getElementById('auth-form');
   const tabLogin   = document.getElementById('tab-login');
@@ -233,26 +179,17 @@ export function initAuthForm() {
 
   if (!form) return;
 
-  let mode = 'login'; // 'login' | 'signup'
+  let mode = 'login';
 
   const setMode = (m) => {
     mode = m;
     nameGroup.hidden = mode === 'login';
-    submitBtn.textContent = mode === 'login' ? 'Sign In' : 'Create Account';
-    // Support both old and new tab class styles
+    submitBtn.textContent = mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta';
     ['tab--active','active'].forEach(cls => {
       tabLogin.classList.toggle(cls,  mode === 'login');
       tabSignup.classList.toggle(cls, mode === 'signup');
     });
-    // Clear error safely via textContent
     errorEl.textContent = '';
-  };
-
-  // Soportar tanto las clases antiguas (.tab--active) como las nuevas (.active)
-  const setTabActive = (btn, active) => {
-    btn.classList.toggle('tab--active', active);
-    btn.classList.toggle('active', active);
-    btn.setAttribute('aria-selected', String(active));
   };
 
   tabLogin.addEventListener('click',  () => setMode('login'));
@@ -262,53 +199,41 @@ export function initAuthForm() {
     e.preventDefault();
     errorEl.textContent = '';
 
-    // Sanitize — remove all whitespace including invisible Unicode chars
     const email    = emailInput.value.replace(/\s/g, '').toLowerCase();
     const password = passInput.value;
     const name     = nameInput?.value.trim();
 
-    // Basic email format check before hitting Supabase
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email || !emailRegex.test(email)) {
       errorEl.textContent = 'Ingresa un correo electrónico válido.';
-      emailInput.value = email; // show cleaned value
+      emailInput.value = email;
       return;
     }
-    if (!password) {
-      errorEl.textContent = 'La contraseña es requerida.';
-      return;
-    }
-    if (mode === 'signup' && !name) {
-      errorEl.textContent = 'Por favor ingresa tu nombre.';
-      return;
-    }
-    if (password.length < 8) {
-      errorEl.textContent = 'La contraseña debe tener al menos 8 caracteres.';
-      return;
-    }
+    if (!password)                     { errorEl.textContent = 'La contraseña es requerida.'; return; }
+    if (mode === 'signup' && !name)    { errorEl.textContent = 'Por favor ingresa tu nombre.'; return; }
+    if (password.length < 8)           { errorEl.textContent = 'La contraseña debe tener al menos 8 caracteres.'; return; }
 
-    submitBtn.disabled = true;
-    submitBtn.textContent = mode === 'login' ? 'Signing in…' : 'Creating account…';
+    submitBtn.disabled    = true;
+    submitBtn.textContent = mode === 'login' ? 'Iniciando sesión…' : 'Creando cuenta…';
 
     try {
       if (mode === 'login') {
         await signIn(email, password);
       } else {
         await signUp(email, password, name);
-        showToast('Account created! Check your email to confirm.', 'success');
+        showToast('¡Cuenta creada! Revisa tu correo para confirmarla.', 'success');
         setMode('login');
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Sign In';
+        submitBtn.disabled    = false;
+        submitBtn.textContent = 'Iniciar sesión';
         return;
       }
       window.location.reload();
     } catch (err) {
-      errorEl.textContent = err.message;
-      submitBtn.disabled = false;
-      submitBtn.textContent = mode === 'login' ? 'Sign In' : 'Create Account';
+      errorEl.textContent   = err.message;
+      submitBtn.disabled    = false;
+      submitBtn.textContent = mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta';
     }
   });
 
-  // Init state
   setMode('login');
 }
