@@ -12,6 +12,9 @@ let _user = null;
 let _onBack = null;
 let _openChat = null;
 let _mounted = false;
+let _openAutorFn = null; // callback inyectado desde index.html
+
+export function setOpenAutorCallback(fn) { _openAutorFn = fn; }
 
 function mountHilosHTML() {
   if (_mounted) return;
@@ -149,6 +152,16 @@ function buildThreadRow(save, confession, commentCount, authorProfile, index) {
     img.src = authorProfile.avatar_url; img.alt = 'Avatar'; img.loading = 'lazy';
     avatarEl.appendChild(img);
   } else { avatarEl.appendChild(Icons.user(14)); }
+  // Avatar abre autor.js — captura para interceptar antes del click de la card
+  if (confession.user_id && _openAutorFn) {
+    avatarEl.style.cursor = 'pointer';
+    avatarEl.setAttribute('title', 'Ver perfil del autor');
+    avatarEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      _openAutorFn(confession.user_id);
+    }, true);
+  }
   top.appendChild(avatarEl);
 
   const tag = confession.hashtag || '#Confesión';
