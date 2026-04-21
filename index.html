@@ -86,30 +86,49 @@
     const user = await getCurrentUser();
     if (!user && !isGuest) { showLogin(); return; }
 
-    // Montar el feed (genera su propio HTML en #app-root)
-    const { initFeed, mountFeedHTML } = await import('./js/feed.js');
+    const { initFeed, mountFeedHTML, setOpenAutorCallback } = await import('./js/feed.js');
     mountFeedHTML(document.getElementById('app-root'));
 
     const chipSlot = document.getElementById('header-chip');
     const profile  = user ? await getProfile(user.id) : null;
 
-    // ── Tema (botón ya está en el DOM tras mountFeedHTML) ────────
     document.getElementById('theme-btn')?.addEventListener('click', () => {
       applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
     });
-    applyTheme(savedTheme); // re-apply para íconos recién montados
+    applyTheme(savedTheme);
 
     renderHeaderChip(chipSlot, profile, openProfileSheet);
 
+    // ── autor.js — inicializar UNA VEZ y registrar callback global ──
+    let autorMod = null;
+    async function ensureAutor() {
+      if (autorMod) return autorMod;
+      autorMod = await import('./js/autor.js');
+      await autorMod.initAutor(user, profile, () => {
+        // Al cerrar autor, restaurar la vista que estaba activa
+        const active = document.querySelector('.view.active:not(#view-autor)');
+        if (!active) document.getElementById('view-feed')?.classList.add('active');
+      });
+      return autorMod;
+    }
+
+    // openAutor global — se llama desde feed, hilos, chat, buscar, admin
+    async function openAutorView(userId) {
+      const mod = await ensureAutor();
+      mod.openAutor(userId);
+    }
+
+    // Registrar callback en todos los módulos que lo usan
+    setOpenAutorCallback(openAutorView);
+    window.__openAutor = openAutorView;
+
     // ── Profile sheet ────────────────────────────────────────────
-    // El sheet se inyecta en el DOM cuando se necesita por primera vez
     async function ensureProfileSheet() {
       if (document.getElementById('profile-sheet')) return;
       const { mountProfileSheet } = await import('./js/feed.js');
       mountProfileSheet(document.body);
     }
 
-    // Clic en el chip del header abre el sheet
     chipSlot?.addEventListener('click', async () => {
       await ensureProfileSheet();
       openProfileSheet();
@@ -139,7 +158,6 @@
       document.getElementById('view-feed')?.classList.add('active');
     }
 
-    // openChat desde vistas externas
     async function openChatFromConfession(confession) {
       const { switchView } = await import('./js/feed.js');
       switchView('chat');
@@ -163,7 +181,7 @@
       sheetAdmin?.addEventListener('click', async () => {
         closeSheetThen(async () => {
           const { initAdmin, openAdmin } = await import('./js/admin.js');
-          initAdmin(backToFeed);
+          await initAdmin(backToFeed, openAutorView);
           openAdmin();
         });
       });
@@ -179,16 +197,16 @@
         if (!hilosMod) {
           hilosMod = await import('./js/hilos.js');
           await hilosMod.initHilos(user, backToFeed, openChatFromConfession);
+          // Registrar callback de autor en hilos
+          hilosMod.setOpenAutorCallback?.(openAutorView);
         }
         hilosMod.openHilos();
       }
       hilosBtn?.addEventListener('click', openHilosView);
-      document.getElementById('sheet-notif')?.addEventListener('click', () => {
-        closeSheetThen(openHilosView);
-      });
 
       hilosMod = await import('./js/hilos.js');
       await hilosMod.initHilos(user, backToFeed, openChatFromConfession);
+      hilosMod.setOpenAutorCallback?.(openAutorView);
       hilosMod.updateHilosCount?.();
 
       if (window.__pendingOpen === 'hilos') {
@@ -204,50 +222,37 @@
       showLogin();
     });
 
-    // ── Buscar — lazy ─────────────────────────────────────────────
+    // ── Buscar — lazy (fusionado con explorar) ────────────────────
     let buscarMod = null;
     async function openBuscarView() {
       if (!buscarMod) {
         buscarMod = await import('./js/buscar.js');
-        buscarMod.initBuscar(backToFeed, openChatFromConfession);
+        buscarMod.initBuscar(backToFeed, openAutorView);
       }
       buscarMod.openBuscar();
     }
     document.getElementById('sheet-buscar')?.addEventListener('click', () => {
       closeSheetThen(openBuscarView);
     });
-
-    // ── Explorar — lazy ───────────────────────────────────────────
-    let explorarMod = null;
-    async function openExplorarView() {
-      if (!explorarMod) {
-        explorarMod = await import('./js/explorar.js');
-        explorarMod.initExplorar(backToFeed, openChatFromConfession);
-      }
-      explorarMod.openExplorar();
-    }
+    // "Explorar" en el sheet ahora abre buscar (explorar.js eliminado)
     document.getElementById('sheet-explorar')?.addEventListener('click', () => {
-      closeSheetThen(openExplorarView);
+      closeSheetThen(openBuscarView);
     });
 
-    // ── Notificaciones — solo logged-in ───────────────────────────
+    // ── Notificaciones ────────────────────────────────────────────
     if (user) {
       const notifBtn = document.getElementById('notif-btn');
       if (notifBtn) notifBtn.hidden = false;
-      const sheetNotifBtn = document.getElementById('sheet-notif');
-      if (sheetNotifBtn) sheetNotifBtn.hidden = false;
 
-      // Carga notifications.js (badge) de forma lazy pero rápida
+      // notifications.js ahora fusiona badge + vista
       import('./js/notifications.js').then(nc => {
         nc.initNotifications(document.getElementById('notif-badge'), null);
+        nc.initNotificaciones(backToFeed);
       }).catch(() => {});
 
       let notifMod = null;
       async function openNotifView() {
-        if (!notifMod) {
-          notifMod = await import('./js/notificaciones.js');
-          notifMod.initNotificaciones(backToFeed);
-        }
+        if (!notifMod) notifMod = await import('./js/notifications.js');
         notifMod.openNotificaciones();
       }
       notifBtn?.addEventListener('click', openNotifView);
@@ -255,6 +260,13 @@
         closeSheetThen(openNotifView);
       });
     }
+
+    // ── Registrar openAutor en chat.js (lazy) ─────────────────────
+    // chat.js se importa internamente por feed.js — necesitamos registrar
+    // el callback después de que initFeed lo inicialice.
+    import('./js/chat.js').then(chatMod => {
+      chatMod.setOpenAutorCallback?.(openAutorView);
+    }).catch(() => {});
 
     // ── Logo reload ───────────────────────────────────────────────
     document.getElementById('logo-btn')?.addEventListener('click', () => window.location.reload());
