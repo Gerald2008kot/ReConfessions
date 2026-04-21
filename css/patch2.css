@@ -1,0 +1,495 @@
+/* ============================================================
+   patch2.css — RE-CONFESSIONS
+   Estilos para: autor.js, buscar.js (rediseño + rankings),
+   admin.js (Popular + Suspensiones), sistema de suspensión,
+   chip con borde rojo, badge suspended.
+   Cargar DESPUÉS de patch.css
+   ============================================================ */
+
+/* ═══════════════════════════════════════════════════════════
+   SUSPENSION BANNER
+   ═══════════════════════════════════════════════════════════ */
+.suspension-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 16px;
+  background: rgba(220, 38, 38, 0.12);
+  border-bottom: 1px solid rgba(220, 38, 38, 0.35);
+  color: #fca5a5;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  animation: slideDown 0.2s ease both;
+}
+.suspension-banner svg { flex-shrink: 0; color: #f87171; margin-top: 1px; }
+.suspension-banner strong { display: block; font-weight: 700; color: #f87171; }
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CHIP — borde rojo usuario suspendido
+   ═══════════════════════════════════════════════════════════ */
+.chip--suspended .chip__profile-link { position: relative; }
+.chip__profile-link--suspended .chip__avatar,
+.chip__profile-link--suspended .chip__initials {
+  outline: 2.5px solid #ef4444;
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ADMIN — badge suspendido
+   ═══════════════════════════════════════════════════════════ */
+.admin-badge--suspended {
+  background: rgba(220, 38, 38, 0.18);
+  color: #f87171;
+  border: 1px solid rgba(220, 38, 38, 0.4);
+  font-size: 0.6rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-left: 4px;
+}
+.admin-user-row--suspended {
+  background: rgba(220, 38, 38, 0.05);
+  border-left: 2px solid rgba(220, 38, 38, 0.4);
+}
+
+/* Botones de acción: suspender / desuspender */
+.admin-action-btn--suspend {
+  color: #f87171;
+  border-color: rgba(220, 38, 38, 0.35) !important;
+}
+.admin-action-btn--unsuspend {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.35) !important;
+}
+
+/* Historial de sanciones */
+.admin-suspension-history {
+  padding: 4px 0 4px 4px;
+  background: rgba(0,0,0,0.15);
+  border-radius: 6px;
+  margin: 6px 0 2px;
+}
+.admin-suspension-history-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.7rem;
+  color: var(--text-3);
+  padding: 2px 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-family: inherit;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   VISTA AUTOR
+   ═══════════════════════════════════════════════════════════ */
+.autor-hero {
+  padding-bottom: 8px;
+}
+
+.autor-stats-row {
+  display: flex;
+  gap: 0;
+  justify-content: center;
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-left: 20px;
+  margin-right: 20px;
+}
+
+.autor-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 8px;
+  border-right: 1px solid var(--border);
+  gap: 2px;
+}
+.autor-stat:last-child { border-right: none; }
+
+.autor-stat__value {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+}
+.autor-stat__label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Botón Seguir */
+.autor-follow-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 24px;
+  border-radius: 999px;
+  border: 1.5px solid var(--accent);
+  background: var(--accent-dim, rgba(124,106,247,0.15));
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+.autor-follow-btn:active { transform: scale(0.96); }
+.autor-follow-btn--following {
+  background: var(--bg-card);
+  border-color: var(--border);
+  color: var(--text-2);
+}
+.autor-follow-btn:disabled { opacity: 0.6; }
+
+/* Dropdown de acciones admin */
+.autor-admin-dropdown {
+  position: absolute;
+  right: 12px;
+  top: calc(100% + 4px);
+  background: var(--bg-elevated, #1a1a2e);
+  border: 1px solid var(--border-active, rgba(255,255,255,0.12));
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  z-index: 300;
+  overflow: hidden;
+  min-width: 200px;
+  animation: dropDown 0.15s ease both;
+}
+@keyframes dropDown {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+.autor-admin-dropdown__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 14px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+  touch-action: manipulation;
+}
+.autor-admin-dropdown__item:last-child { border-bottom: none; }
+.autor-admin-dropdown__item:hover,
+.autor-admin-dropdown__item:focus { background: var(--surface2, rgba(255,255,255,0.06)); outline: none; }
+.autor-admin-dropdown__item--danger { color: #f87171; }
+
+/* Botón de reportar en cards de autor */
+.rc-card__report-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  transition: color 0.15s;
+  touch-action: manipulation;
+}
+.rc-card__report-btn:hover { color: var(--text-2); }
+
+/* ═══════════════════════════════════════════════════════════
+   BUSCAR — rediseño completo
+   ═══════════════════════════════════════════════════════════ */
+.buscar-header { gap: 0; }
+
+.buscar-input-wrap {
+  position: relative;
+  flex: 1;
+  padding: 0 12px 0 0;
+}
+.buscar-input-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text-3);
+}
+#buscar-input {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  padding: 9px 12px 9px 34px;
+  font-size: 0.85rem;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+#buscar-input:focus { border-color: var(--accent); }
+#buscar-input::placeholder { color: var(--text-3); }
+
+/* Tabs explorar / popular */
+.buscar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+.buscar-tab {
+  flex: 1;
+  padding: 10px 8px;
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  font-family: inherit;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.buscar-tab--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.buscar-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Filtros de periodo */
+.buscar-ranking-filters {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.buscar-period-btn {
+  flex: 1;
+  padding: 7px 4px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: none;
+  color: var(--text-3);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.buscar-period-btn--active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim, rgba(124,106,247,0.12));
+}
+
+/* Card de ranking */
+.buscar-ranking-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.buscar-ranking-card.rc-card--visible,
+.buscar-ranking-card { opacity: 1 !important; transform: none !important; }
+/* Forzar visibilidad inmediata en ranking */
+.buscar-ranking-card { opacity: 1; transform: none; animation: fadeUp 0.22s ease both; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.buscar-ranking-pos {
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-3);
+}
+.buscar-ranking-info { flex: 1; min-width: 0; }
+.buscar-ranking-alias { font-weight: 600; font-size: 0.85rem; margin: 0; }
+.buscar-ranking-meta  { font-size: 0.71rem; opacity: 0.55; margin: 2px 0 0; display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* Resultado de usuario en búsqueda */
+.buscar-user-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.buscar-user-result:hover,
+.buscar-user-result:focus { background: var(--surface2, rgba(255,255,255,0.04)); outline: none; }
+.buscar-user-info { flex: 1; min-width: 0; }
+.buscar-user-alias { font-weight: 600; font-size: 0.85rem; margin: 0; }
+
+/* ═══════════════════════════════════════════════════════════
+   ADMIN — tab Popular
+   ═══════════════════════════════════════════════════════════ */
+.admin-popular-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.admin-popular-filters {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 0;
+}
+#admin-popular-search {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+#admin-popular-search:focus { border-color: var(--accent); }
+#admin-popular-search::placeholder { color: var(--text-3); }
+
+.admin-popular-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  animation: fadeUp 0.22s ease both;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GUEST CHIP — actualizado
+   ═══════════════════════════════════════════════════════════ */
+.chip--guest .chip__initials--guest {
+  background: rgba(255,255,255,0.06);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EXPLORAR — section title (compartido con buscar)
+   ═══════════════════════════════════════════════════════════ */
+.explorar-section-title {
+  padding: 10px 16px 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ADMIN — tabs con scroll horizontal
+   ═══════════════════════════════════════════════════════════ */
+.admin-tabs-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+.admin-tabs-scroll::-webkit-scrollbar { display: none; }
+
+.admin-tabs {
+  display: flex;
+  gap: 0;
+  min-width: max-content; /* evita que los tabs se compriman */
+  border-bottom: none;    /* el borde lo pone admin-tabs-scroll */
+}
+
+.admin-tab {
+  flex: none;            /* no shrink — mantiene tamaño propio */
+  padding: 10px 16px;
+  white-space: nowrap;
+  font-size: 0.82rem;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ADMIN — Sort buttons (Popular)
+   ═══════════════════════════════════════════════════════════ */
+.admin-sort-btn {
+  flex: 1;
+  padding: 7px 4px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: none;
+  color: var(--text-3);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color .15s, color .15s, background .15s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.admin-sort-btn--active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim, rgba(124,106,247,0.12));
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ADMIN — user-search-results visible con fondo
+   ═══════════════════════════════════════════════════════════ */
+#admin-user-search-results:not(:empty) {
+  background: var(--bg-card);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ADMIN — panels que necesitan overflow propio
+   ═══════════════════════════════════════════════════════════ */
+#admin-panel-users.active,
+#admin-panel-popular.active {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
