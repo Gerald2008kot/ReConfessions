@@ -1611,5 +1611,3 @@ img { display: block; max-width: 100%; }
 .rc-card--highlight {
   animation: cardHighlight 1.4s var(--ease) both;
 }
-
-
