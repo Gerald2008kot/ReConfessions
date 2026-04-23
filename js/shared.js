@@ -1,45 +1,44 @@
-// js/router.js
+// js/shared.js
 // ============================================================
-// Router SPA — gestiona historial y botón atrás del navegador
-// para todas las vistas y overlays (sheet, image modal).
+// Utilidades compartidas entre feed.js, perfil.js, hilos.js
 // ============================================================
 
-// Estado del router: pila de "capas" abiertas
-// Cada capa: { key, close }
-// key: identificador único ('chat', 'hilos', 'perfil', 'admin', 'sheet', 'img-modal')
-const _stack = [];
+const HASHTAG_HS = {
+  '#Confesión':      { h: 260, s: 70 }, '#Desamor':         { h:   0, s: 80 },
+  '#Traición':       { h:  25, s: 85 }, '#Ruptura':         { h: 330, s: 75 },
+  '#Secreto':        { h:  45, s: 90 }, '#Familia':         { h: 145, s: 65 },
+  '#Trabajo':        { h: 215, s: 75 }, '#Amistad':         { h: 175, s: 65 },
+  '#Vergüenza':      { h: 290, s: 65 }, '#Arrepentimiento': { h:  10, s: 60 },
+  '#Felicidad':      { h:  52, s: 85 }, '#Miedo':           { h: 240, s: 65 },
+  '#Sueño':          { h: 275, s: 70 }, '#Enojo':           { h:   4, s: 90 },
+  '#Nostalgia':      { h: 200, s: 70 },
+};
 
-// ── Push (abrir algo) ─────────────────────────────────────────
-// Llama a esto ANTES de mostrar la vista/overlay.
-// closeFn: función que cierra la vista SIN tocar el historial.
-export function routerPush(key, closeFn) {
-  history.pushState({ routerKey: key }, '', location.href.split('#')[0]);
-  _stack.push({ key, close: closeFn });
+function hashStr(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  return Math.abs(h);
 }
 
-// ── Pop manual (botón "atrás" dentro de la UI) ────────────────
-// Llama a esto desde los botones de back de cada vista.
-// Ejecuta history.back() → dispara popstate → cierra la capa.
-export function routerBack() {
-  if (_stack.length > 0) {
-    history.back(); // popstate hará el resto
-  }
+/**
+ * Devuelve { bg, fg } para un hashtag dado.
+ * Cada tag tiene un color HSL único y consistente.
+ */
+export function tagColor(tag) {
+  const e = HASHTAG_HS[tag];
+  const h = e ? e.h : hashStr(tag) % 360;
+  const s = e ? e.s : 65;
+  return {
+    bg: `hsla(${h},${s}%,60%,0.13)`,
+    fg: `hsl(${h},${Math.min(s + 10, 95)}%,72%)`,
+  };
 }
 
-// ── Pop programático (sin botón — p.ej. abrir otra vista) ─────
-// Cierra la capa superior sin empujar historial extra.
-export function routerPop(key) {
-  const idx = key
-    ? _stack.findIndex(l => l.key === key)
-    : _stack.length - 1;
-  if (idx < 0) return;
-  const [layer] = _stack.splice(idx, 1);
-  layer.close?.();
+/**
+ * Construye un mapa { key: count } desde un array de filas.
+ */
+export function countMap(rows, key) {
+  const m = {};
+  rows?.forEach(r => { m[r[key]] = (m[r[key]] || 0) + 1; });
+  return m;
 }
-
-// ── Escuchar popstate (botón nativo del navegador) ────────────
-window.addEventListener('popstate', () => {
-  if (_stack.length === 0) return; // nada que cerrar aquí
-  const layer = _stack.pop();
-  layer.close?.();
-});
