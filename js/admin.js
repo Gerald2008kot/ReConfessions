@@ -26,8 +26,9 @@ export async function initAdmin(onBack) {
   document.getElementById('admin-back-btn')?.addEventListener('click', closeAdmin);
   
   // Tab navigation
-  document.getElementById('admin-tab-users')?.addEventListener('click', () => switchAdminTab('users'));
-  document.getElementById('admin-tab-create')?.addEventListener('click', () => switchAdminTab('create'));
+  document.getElementById('admin-tab-users')?.addEventListener('click',   () => switchAdminTab('users'));
+  document.getElementById('admin-tab-create')?.addEventListener('click',  () => switchAdminTab('create'));
+  document.getElementById('admin-tab-reports')?.addEventListener('click', () => switchAdminTab('reports'));
   
   // Wire create user form
   initCreateUserForm();
@@ -55,13 +56,12 @@ export function closeAdmin() {
 
 // ── Tab switch ────────────────────────────────────────────────
 function switchAdminTab(tab) {
-  document.getElementById('admin-panel-users')?.classList.toggle('active', tab === 'users');
-  document.getElementById('admin-panel-create')?.classList.toggle('active', tab === 'create');
-  
-  document.getElementById('admin-tab-users')?.classList.toggle('active', tab === 'users');
-  document.getElementById('admin-tab-create')?.classList.toggle('active', tab === 'create');
-  
-  if (tab === 'users') loadUsers();
+  ['users', 'create', 'reports'].forEach(t => {
+    document.getElementById(`admin-panel-${t}`)?.classList.toggle('active', tab === t);
+    document.getElementById(`admin-tab-${t}`)?.classList.toggle('active',   tab === t);
+  });
+  if (tab === 'users')   loadUsers();
+  if (tab === 'reports') loadReports();
 }
 
 // ── Panel Usuarios ────────────────────────────────────────────
@@ -265,4 +265,79 @@ function buildCountMap(rows, key) {
   const map = {};
   rows?.forEach(r => { map[r[key]] = (map[r[key]] || 0) + 1; });
   return map;
+}
+
+// ── Panel Reportes ────────────────────────────────────────────
+async function loadReports() {
+  const listEl = document.getElementById('admin-report-list');
+  if (!listEl) return;
+
+  while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
+  listEl.appendChild(el('p', { className: 'admin-loading', textContent: 'Cargando reportes…' }));
+
+  const { data, error } = await sb
+    .from('reports')
+    .select('id, reported_type, reported_id, reason, status, created_at, reporter_id, profiles!reporter_id(full_name, anonymous_number)')
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (error) { showToast('Error cargando reportes.', 'error'); return; }
+
+  while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
+
+  if (!data?.length) {
+    listEl.appendChild(el('p', { className: 'admin-empty', textContent: 'No hay reportes.' }));
+    return;
+  }
+
+  data.forEach(report => {
+    const row = el('div', { className: `admin-report-row${report.status === 'resolved' ? ' admin-report-row--resolved' : ''}` });
+
+    const info = el('div', { className: 'admin-report-row__info' });
+    const anonNum = report.profiles?.anonymous_number ?? '?';
+    info.appendChild(el('span', { className: 'admin-report-row__type', textContent: report.reported_type === 'profile' ? 'Perfil' : 'Contenido' }));
+    info.appendChild(el('p', { className: 'admin-report-row__reason', textContent: report.reason }));
+    info.appendChild(el('span', {
+      className: 'admin-user-row__meta',
+      textContent: `Por Anónimo_${anonNum} · ${formatDate(report.created_at)}`,
+    }));
+    row.appendChild(info);
+
+    const actions = el('div', { className: 'admin-user-row__actions' });
+
+    if (report.status !== 'resolved') {
+      const resolveBtn = el('button', {
+        className: 'admin-action-btn',
+        attrs: { type: 'button', title: 'Marcar como resuelto' },
+        textContent: '✓',
+      });
+      resolveBtn.addEventListener('click', async () => {
+        const { error: e } = await sb.from('reports').update({ status: 'resolved' }).eq('id', report.id);
+        if (e) { showToast(e.message, 'error'); return; }
+        row.classList.add('admin-report-row--resolved');
+        resolveBtn.disabled = true;
+        showToast('Reporte marcado como resuelto.', 'success');
+      });
+      actions.appendChild(resolveBtn);
+    } else {
+      actions.appendChild(el('span', { className: 'admin-badge admin-badge--you', textContent: 'Resuelto' }));
+    }
+
+    // Ver perfil reportado (si es tipo profile)
+    if (report.reported_type === 'profile') {
+      const viewBtn = el('button', {
+        className: 'admin-action-btn',
+        attrs: { type: 'button', title: 'Ver perfil reportado' },
+      });
+      viewBtn.appendChild(Icons.user ? Icons.user(14) : el('span', { textContent: '👁' }));
+      viewBtn.addEventListener('click', async () => {
+        const { openAutor } = await import('./autor.js');
+        openAutor(report.reported_id, 'admin');
+      });
+      actions.appendChild(viewBtn);
+    }
+
+    row.appendChild(actions);
+    listEl.appendChild(row);
+  });
 }
