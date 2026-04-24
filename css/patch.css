@@ -524,3 +524,255 @@ body:has(.login-page) {
 .login-footnote {
   text-align: center; font-size: 0.78rem; color: var(--text-3); line-height: 1.6;
 }
+
+/* ============================================================
+   NUEVAS VISTAS: Autor, Buscar, Stats perfil, Admin tabs
+   ============================================================ */
+
+/* ── Vista Autor Overlay ─────────────────────────────────────── */
+.autor-overlay {
+  position: fixed; inset: 0; z-index: 400;
+  background: var(--bg, #0e0e12);
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+  overflow: hidden;
+}
+.autor-overlay--open { transform: translateX(0); }
+
+.autor-body {
+  flex: 1; overflow-y: auto; scroll-behavior: smooth;
+  scrollbar-width: none; padding-bottom: 48px;
+}
+.autor-body::-webkit-scrollbar { display: none; }
+
+.autor-hero {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 24px 20px 16px; gap: 10px; text-align: center;
+}
+
+.autor-avatar-wrap { position: relative; }
+.autor-avatar {
+  width: 76px; height: 76px; border-radius: 50%;
+  background: var(--bg-card); border: 2px solid var(--border);
+  overflow: hidden; display: flex; align-items: center; justify-content: center;
+}
+.autor-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.autor-avatar__initials {
+  font-size: 1.5rem; font-weight: 700; color: var(--text-1);
+  line-height: 1;
+}
+
+.autor-name {
+  font-size: 1.15rem; font-weight: 700; color: var(--text-1);
+  margin: 0; letter-spacing: 0.02em;
+}
+
+.autor-stats {
+  display: flex; gap: 24px; justify-content: center;
+  padding: 8px 0;
+}
+.autor-stat {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.autor-stat__value {
+  font-size: 1.1rem; font-weight: 700; color: var(--text-1); line-height: 1;
+}
+.autor-stat__label {
+  font-size: 0.7rem; color: var(--text-3); text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.autor-follow-btn {
+  padding: 9px 28px; border-radius: 999px;
+  border: 1.5px solid var(--accent); background: var(--accent);
+  color: #fff; font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; transition: background 0.15s, opacity 0.15s;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.autor-follow-btn--following {
+  background: transparent; color: var(--accent);
+}
+.autor-follow-btn:active { opacity: 0.75; }
+
+.autor-bio {
+  font-size: 0.85rem; color: var(--text-2); line-height: 1.55;
+  max-width: 320px; margin: 0; text-align: center;
+}
+
+.autor-feed { padding: 0 0 16px; }
+
+/* Suspension banner */
+.autor-suspension-banner, .perfil-suspension-banner {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 16px; margin: 8px 12px;
+  background: hsla(25,90%,55%,0.12);
+  border: 1px solid hsla(25,90%,55%,0.35);
+  border-radius: var(--radius-sm, 10px);
+  color: hsl(25,85%,65%);
+  font-size: 0.82rem; line-height: 1.5;
+}
+.autor-suspension-banner svg,
+.perfil-suspension-banner svg { flex-shrink: 0; margin-top: 1px; }
+
+/* Dropdown menú autor */
+.autor-menu-wrap { position: relative; }
+.autor-dropdown {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  min-width: 192px; background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: var(--radius-sm, 10px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  z-index: 600; overflow: hidden;
+  animation: dropdownIn 0.15s ease;
+}
+@keyframes dropdownIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.autor-dropdown__item {
+  display: block; width: 100%; padding: 12px 16px;
+  background: none; border: none; text-align: left;
+  font-size: 0.87rem; font-weight: 500; cursor: pointer;
+  transition: background 0.12s; color: var(--text-1);
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.autor-dropdown__item:active { background: var(--bg-hover, rgba(255,255,255,.05)); }
+.autor-dropdown__divider {
+  height: 1px; background: var(--border); margin: 2px 0;
+}
+.autor-dropdown__empty {
+  padding: 12px 16px; color: var(--text-3); font-size: 0.82rem; margin: 0;
+}
+
+.autor-loading {
+  text-align: center; padding: 40px 16px;
+  color: var(--text-3); font-size: 0.9rem;
+}
+
+/* ── Vista Buscar Overlay ────────────────────────────────────── */
+.buscar-overlay {
+  position: fixed; inset: 0; z-index: 350;
+  background: var(--bg, #0e0e12);
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+  overflow: hidden;
+}
+.buscar-overlay--open { transform: translateX(0); }
+
+.buscar-body {
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column;
+  scrollbar-width: none;
+}
+.buscar-body::-webkit-scrollbar { display: none; }
+
+.buscar-search-wrap {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px 6px;
+  background: var(--bg);
+}
+.buscar-search-icon { color: var(--text-3); flex-shrink: 0; }
+.buscar-search-input {
+  flex: 1; background: var(--bg-card);
+  border: 1.5px solid var(--border); border-radius: 999px;
+  padding: 9px 16px; color: var(--text-1); font-size: 0.9rem;
+  font-family: inherit; outline: none;
+  transition: border-color 0.15s;
+}
+.buscar-search-input:focus { border-color: var(--accent); }
+
+.buscar-range-bar {
+  display: flex; gap: 6px; padding: 8px 14px 4px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.buscar-range-bar::-webkit-scrollbar { display: none; }
+
+.buscar-range-chip {
+  padding: 6px 16px; border-radius: 999px;
+  border: 1.5px solid var(--border); background: var(--bg-card);
+  color: var(--text-2); font-size: 0.78rem; font-weight: 600;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.buscar-range-chip--active {
+  border-color: var(--accent); background: hsla(var(--accent-h,260),70%,60%,0.12);
+  color: var(--accent);
+}
+
+.buscar-hashtag-bar {
+  padding: 4px 14px 8px;
+}
+
+.buscar-results {
+  flex: 1; padding: 4px 0 48px;
+}
+
+/* ── Perfil stats 4 columnas ─────────────────────────────────── */
+.profile-stats--4 {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+  gap: 6px !important;
+}
+.profile-stats--4 .profile-stat {
+  padding: 10px 4px !important;
+}
+.profile-stats--4 .profile-stat__value {
+  font-size: 1.2rem !important;
+}
+.profile-stats--4 .profile-stat__label {
+  font-size: 0.62rem !important;
+}
+
+/* ── Bio editable perfil ─────────────────────────────────────── */
+.perfil-bio-slot {
+  padding: 4px 16px 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.perfil-bio-input {
+  width: 100%; resize: none;
+  background: var(--bg-card); border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm, 10px);
+  padding: 10px 14px; color: var(--text-1); font-size: 0.85rem;
+  font-family: inherit; outline: none; line-height: 1.5;
+  transition: border-color 0.15s; box-sizing: border-box;
+}
+.perfil-bio-input:focus { border-color: var(--accent); }
+.perfil-bio-save-btn {
+  align-self: flex-end; padding: 7px 18px;
+  border-radius: 999px; border: 1.5px solid var(--accent);
+  background: transparent; color: var(--accent);
+  font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, color 0.15s;
+}
+.perfil-bio-save-btn:active { background: var(--accent); color: #fff; }
+
+/* ── Admin tabs scroll ───────────────────────────────────────── */
+.admin-tabs--scroll {
+  overflow-x: auto !important; scrollbar-width: none !important;
+  -webkit-overflow-scrolling: touch;
+  flex-wrap: nowrap !important;
+  gap: 0 !important;
+}
+.admin-tabs--scroll::-webkit-scrollbar { display: none; }
+.admin-tabs--scroll .admin-tab { flex-shrink: 0; }
+
+/* ── Reportes panel ──────────────────────────────────────────── */
+.admin-report-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+}
+.admin-report-row--resolved { opacity: 0.5; }
+.admin-report-row__info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.admin-report-row__type {
+  font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--accent);
+}
+.admin-report-row__reason {
+  font-size: 0.85rem; color: var(--text-1); margin: 0; line-height: 1.4;
+  word-break: break-word;
+}
+
+/* ── Botón buscar en header ──────────────────────────────────── */
+#buscar-btn { order: -1; }
