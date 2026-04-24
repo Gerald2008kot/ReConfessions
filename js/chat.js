@@ -8,7 +8,8 @@ import { getCurrentUser, getProfile }            from './auth.js';
 import { el, formatDate, showToast, getInitials } from './utils.js';
 import { Icons }                                 from './icons.js';
 import { hashtagColor, canDelete as feedCanDelete, canDeleteAsThreadOwner } from './feed.js';
-import { toggleSaveThread }                          from './hilos.js';
+import { toggleSaveThread }                      from './hilos.js';
+import { bindAvatarToAutor }                     from './autor.js';
 
 let currentUser      = null;
 let currentProfile   = null;
@@ -135,15 +136,35 @@ async function renderConfessionCard(confession) {
   } else {
     avatarEl.appendChild(Icons.user(14));
   }
+  // Navegar al perfil público del autor
+  if (confession.user_id) bindAvatarToAutor(avatarEl, confession.user_id, 'chat');
   top.appendChild(avatarEl);
 
-  const tag      = confession.hashtag || '#Confesión';
-  const tagColor = hashtagColor(tag);
-  top.appendChild(el('span', {
-    className:   'rc-card__tag',
-    textContent: tag,
-    attrs:       { style: `background:${tagColor.bg};color:${tagColor.fg}` },
-  }));
+  // Mostrar todos los hashtags activos (no solo el primero)
+  const activeTags = confession.hashtags?.length
+    ? confession.hashtags
+    : (confession.hashtag ? [confession.hashtag] : ['#Confesión']);
+
+  if (activeTags.length === 1) {
+    const tc = hashtagColor(activeTags[0]);
+    top.appendChild(el('span', {
+      className:   'rc-card__tag',
+      textContent: activeTags[0],
+      attrs:       { style: `background:${tc.bg};color:${tc.fg}` },
+    }));
+  } else {
+    const tagsWrap = el('div', { className: 'rc-card__tags' });
+    activeTags.forEach(tag => {
+      const tc = hashtagColor(tag);
+      tagsWrap.appendChild(el('span', {
+        className:   'rc-card__tag',
+        textContent: tag,
+        attrs:       { style: `background:${tc.bg};color:${tc.fg}` },
+      }));
+    });
+    top.appendChild(tagsWrap);
+  }
+
   top.appendChild(el('span', { className: 'rc-card__time', textContent: formatDate(confession.created_at) }));
   card.appendChild(top);
 
@@ -233,6 +254,8 @@ function appendBubble(comment, animate) {
   if (!isOwn) {
     const av = el('div', { className: 'chat-avatar-sm' });
     av.appendChild(Icons.user(12));
+    // Tocar el avatar del comentarista → perfil autor
+    if (comment.user_id) bindAvatarToAutor(av, comment.user_id, 'chat');
     row.appendChild(av);
   }
 
@@ -317,6 +340,10 @@ function initCommentForm() {
     if (!currentUser || !activeConfession) return;
     const content = commentInputEl.value.trim();
     if (!content) return;
+    // Comprobar suspensión
+    if (currentProfile?.suspended_until && new Date(currentProfile.suspended_until) > new Date()) {
+      showToast('No puedes comentar mientras estás suspendido.', 'error'); return;
+    }
     commentSubmitEl.disabled = true;
     try {
       const { error } = await sb.from('comments').insert({
