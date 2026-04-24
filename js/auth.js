@@ -28,7 +28,7 @@ export async function getCurrentUser() {
 export async function getProfile(userId) {
   const { data, error } = await sb
     .from('profiles')
-    .select('id, full_name, avatar_url, is_admin')
+    .select('id, full_name, avatar_url, is_admin, bio, anonymous_number, suspended_until')
     .eq('id', userId)
     .single();
 
