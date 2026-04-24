@@ -27,6 +27,13 @@
     </button>
 
     <div class="app-header__actions">
+      <!-- Botón Buscar -->
+      <button id="buscar-btn" class="app-header__icon-btn" type="button" aria-label="Buscar publicaciones">
+        <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+        </svg>
+      </button>
+
       <button id="hilos-btn" class="app-header__icon-btn" type="button" aria-label="Hilos guardados" hidden>
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/>
@@ -235,20 +242,27 @@
       </div>
       <p id="perfil-avatar-status" class="profile-status"></p>
 
-      <div class="profile-stats">
+      <div class="profile-stats profile-stats--4">
         <div class="profile-stat">
-          <span id="perfil-stat-conf"  class="profile-stat__value">—</span>
+          <span id="perfil-stat-conf"      class="profile-stat__value">—</span>
           <span class="profile-stat__label">Confesiones</span>
         </div>
         <div class="profile-stat">
-          <span id="perfil-stat-cm"    class="profile-stat__value">—</span>
+          <span id="perfil-stat-cm"        class="profile-stat__value">—</span>
           <span class="profile-stat__label">Respuestas</span>
         </div>
         <div class="profile-stat">
-          <span id="perfil-stat-likes" class="profile-stat__value">—</span>
+          <span id="perfil-stat-likes"     class="profile-stat__value">—</span>
           <span class="profile-stat__label">Likes</span>
         </div>
+        <div class="profile-stat">
+          <span id="perfil-stat-followers" class="profile-stat__value">—</span>
+          <span class="profile-stat__label">Seguidores</span>
+        </div>
       </div>
+
+      <!-- Bio editable -->
+      <div id="perfil-bio-slot" class="perfil-bio-slot"></div>
 
       <div class="profile-actions">
         <button id="perfil-signout-btn" class="profile-signout-btn" type="button">
@@ -287,9 +301,10 @@
     <div style="min-width:38px"></div>
   </header>
 
-  <div class="admin-tabs">
-    <button id="admin-tab-users"  class="admin-tab active" type="button">Usuarios</button>
-    <button id="admin-tab-create" class="admin-tab"        type="button">Crear Usuario</button>
+  <div class="admin-tabs admin-tabs--scroll">
+    <button id="admin-tab-users"   class="admin-tab active" type="button">Usuarios</button>
+    <button id="admin-tab-create"  class="admin-tab"        type="button">Crear Usuario</button>
+    <button id="admin-tab-reports" class="admin-tab"        type="button">Reportes</button>
   </div>
 
   <div id="admin-panel-users" class="admin-panel active">
@@ -319,6 +334,12 @@
       <p id="admin-create-error" class="admin-error" role="alert"></p>
       <button type="submit" class="admin-submit-btn">Crear Usuario</button>
     </form>
+  </div>
+
+  <div id="admin-panel-reports" class="admin-panel">
+    <div id="admin-report-list" class="admin-user-list">
+      <p class="admin-loading">Cargando reportes…</p>
+    </div>
   </div>
 </div>
 
@@ -372,6 +393,7 @@
   import { initHilos, openHilos,
            updateHilosCount }                    from './js/hilos.js';
   import { routerPush, routerBack }              from './js/router.js';
+  import { initAutor }                           from './js/autor.js';
 
   // ── SPA: mostrar login sin navegar a otro archivo ────────────
   async function showLogin() {
@@ -432,6 +454,10 @@
 
     renderHeaderChip(chipSlot, profile, openProfileSheet);
 
+    // Chip de sesión (avatar/iniciales) abre el sheet de opciones
+    // El chip de invitado al tocarse envía al login
+    // (el comportamiento ya está en renderHeaderChip via __openProfileSheet / __showLogin)
+
     if (user && profile) {
       document.getElementById('sheet-name').textContent  = profile.full_name;
       document.getElementById('sheet-email').textContent = user.email;
@@ -482,6 +508,9 @@
     }
 
     if (user && profile) await initPerfil(user, profile, chipSlot, () => switchView('feed', false));
+
+    // Inicializar módulo autor (necesario para que los avatares funcionen antes del boot completo)
+    await initAutor();
 
     initAdmin(() => {
       document.getElementById('view-admin').classList.remove('active');
