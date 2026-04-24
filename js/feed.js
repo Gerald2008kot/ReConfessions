@@ -15,6 +15,8 @@ import { initChat, openChat }                  from './chat.js';
 import { Icons }                               from './icons.js';
 import { tagColor, countMap as sharedCountMap } from './shared.js';
 import { routerPush, routerBack }              from './router.js';
+import { openAutor, bindAvatarToAutor }        from './autor.js';
+import { initBuscar, openBuscar }              from './buscar.js';
 
 let currentUser    = null;
 let currentProfile = null;
@@ -176,6 +178,19 @@ export async function initFeed() {
   }
 
   await initChat(_closeChatUI);
+
+  // Inicializar Buscar
+  await initBuscar(
+    () => { /* onClose - nada extra */ },
+    async (confession) => { switchView('chat'); await openChat(confession); }
+  );
+
+  // Botón de búsqueda en el header
+  const searchBtn = document.getElementById('buscar-btn');
+  if (searchBtn) {
+    searchBtn.addEventListener('click', openBuscar);
+  }
+
   await loadConfessions();
   initComposeForm();
   startRealtime();
@@ -505,6 +520,10 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
   } else {
     avatarEl.appendChild(Icons.user(14));
   }
+  // Navegar al perfil público del autor al tocar el avatar
+  if (confession.user_id) {
+    bindAvatarToAutor(avatarEl, confession.user_id, 'feed');
+  }
   top.appendChild(avatarEl);
 
   // Tags
@@ -760,6 +779,7 @@ async function handleOpenChat(confession) {
 // ── Likes ─────────────────────────────────────────────────────
 async function toggleLike(confessionId, btn) {
   if (!currentUser) { showToast('Inicia sesión para dar like.', 'info'); return; }
+  if (_isSuspended()) { showToast('No puedes reaccionar mientras estás suspendido.', 'error'); return; }
   const isLiked   = btn.classList.contains('rc-card__action--liked');
   const countSpan = btn.querySelector('.rc-card__action-count');
   let count       = parseInt(countSpan.textContent) || 0;
@@ -843,6 +863,7 @@ function initComposeForm() {
     const content      = composeInput?.value.trim();
     const pollQuestion = composePollInput?.value.trim() || null;
     if (!content) return;
+    if (_isSuspended()) { showToast('No puedes confesar mientras estás suspendido.', 'error'); return; }
 
     // Tags del picker custom (máx 3, mínimo 1)
     const selectedTags   = _pickerSelected.length ? _pickerSelected.slice(0, 3) : ['#Confesión'];
@@ -915,6 +936,12 @@ function initComposeForm() {
 
 export { tagColor };
 export const hashtagColor = tagColor;
+
+// ── Suspension check helper ───────────────────────────────────
+function _isSuspended() {
+  if (!currentProfile?.suspended_until) return false;
+  return new Date(currentProfile.suspended_until) > new Date();
+}
 
 // ── Realtime ──────────────────────────────────────────────────
 function startRealtime() {
