@@ -1,5 +1,7 @@
 // js/perfil.js
-// Vista Mi Perfil — con contador de Seguidores y banner de Suspensión
+// ============================================================
+// Vista de Perfil — SPA view dentro de index.html
+// ============================================================
 
 import { sb }                                    from './api.js';
 import { getCurrentUser, getProfile, signOut,
@@ -14,123 +16,6 @@ let _user    = null;
 let _profile = null;
 let _chipSlot = null;
 let _onBack   = null;
-let _mounted  = false;
-
-// ── Montar HTML ───────────────────────────────────────────────
-function mountPerfilHTML() {
-  if (_mounted) return;
-  _mounted = true;
-
-  const view = document.createElement('div');
-  view.id = 'view-perfil';
-  view.className = 'view';
-  view.hidden = true;
-  view.innerHTML = `
-  <header class="app-header">
-    <button id="perfil-back-btn" class="app-header__back" type="button" aria-label="Volver">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
-      </svg>
-    </button>
-    <h2 class="app-header__title">Mi Perfil</h2>
-    <div style="min-width:44px"></div>
-  </header>
-
-  <!-- Banner de suspensión -->
-  <div id="perfil-suspension-banner" class="suspension-banner" hidden>
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
-    </svg>
-    <div>
-      <strong>Tu cuenta está suspendida</strong>
-      <p id="perfil-suspension-detail" style="margin:2px 0 0;font-size:0.78rem;opacity:0.85"></p>
-    </div>
-  </div>
-
-  <div style="overflow-y:auto;flex:1;scrollbar-width:none;">
-    <div class="profile-hero">
-      <div class="profile-avatar-wrap">
-        <div class="profile-avatar">
-          <span id="perfil-initials" class="profile-avatar__initials"></span>
-          <img id="perfil-avatar-img" class="profile-avatar__img" alt="Foto de perfil" hidden />
-        </div>
-        <label class="profile-avatar__edit-btn" for="perfil-avatar-input" aria-label="Cambiar foto">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/>
-          </svg>
-        </label>
-        <input type="file" id="perfil-avatar-input" class="uploader__input" accept="image/jpeg,image/png,image/gif,image/webp" />
-      </div>
-      <h2 id="perfil-name"  class="profile-name"></h2>
-      <p  id="perfil-email" class="profile-email"></p>
-      <span id="perfil-admin-badge" class="profile-admin-badge" hidden>Admin</span>
-      <div class="uploader__progress-track" id="perfil-avatar-track" hidden style="width:180px;margin:10px auto 0">
-        <div id="perfil-avatar-bar" class="uploader__progress-bar"></div>
-      </div>
-      <p id="perfil-avatar-status" class="profile-status"></p>
-
-      <!-- Stats con Seguidores añadidos -->
-      <div class="profile-stats">
-        <div class="profile-stat">
-          <span id="perfil-stat-conf"      class="profile-stat__value">—</span>
-          <span class="profile-stat__label">Confesiones</span>
-        </div>
-        <div class="profile-stat">
-          <span id="perfil-stat-cm"        class="profile-stat__value">—</span>
-          <span class="profile-stat__label">Respuestas</span>
-        </div>
-        <div class="profile-stat">
-          <span id="perfil-stat-likes"     class="profile-stat__value">—</span>
-          <span class="profile-stat__label">Likes</span>
-        </div>
-        <div class="profile-stat">
-          <span id="perfil-stat-followers" class="profile-stat__value">—</span>
-          <span class="profile-stat__label">Seguidores</span>
-        </div>
-        <div class="profile-stat">
-          <span id="perfil-stat-views"     class="profile-stat__value">—</span>
-          <span class="profile-stat__label">Vistas</span>
-        </div>
-      </div>
-
-      <div class="profile-actions">
-        <button id="perfil-signout-btn" class="profile-signout-btn" type="button">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/>
-          </svg>
-          Cerrar Sesión
-        </button>
-      </div>
-    </div>
-
-    <div class="perfil-bio-wrap">
-      <p class="perfil-bio-label">Bio</p>
-      <textarea id="perfil-bio-input" placeholder="Cuéntanos algo sobre ti…" maxlength="200" rows="3"></textarea>
-    </div>
-
-    <div class="perfil-private-row">
-      <div>
-        <p class="perfil-private-label">Ocultar publicaciones</p>
-        <p class="perfil-private-desc">Tus confesiones desaparecen del feed público, pero siguen siendo accesibles por enlace directo</p>
-      </div>
-      <label class="toggle-switch" aria-label="Activar perfil privado">
-        <input type="checkbox" id="perfil-private-toggle" />
-        <span class="toggle-switch__track"></span>
-      </label>
-    </div>
-
-    <div class="chat-divider" style="padding:0 16px;margin:0 0 4px">
-      <div class="chat-divider__line"></div>
-      <span class="chat-divider__label">Mis confesiones</span>
-      <div class="chat-divider__line"></div>
-    </div>
-    <div id="perfil-feed" class="feed-scroll" style="flex:none;overflow-y:visible;padding-bottom:40px;gap:8px">
-      <p class="feed-empty">Cargando…</p>
-    </div>
-  </div>`;
-
-  document.getElementById('app-root').appendChild(view);
-}
 
 // ── Init ──────────────────────────────────────────────────────
 export async function initPerfil(user, profile, chipSlot, onBack) {
@@ -139,35 +24,14 @@ export async function initPerfil(user, profile, chipSlot, onBack) {
   _chipSlot = chipSlot;
   _onBack   = onBack;
 
-  mountPerfilHTML();
-
   document.getElementById('perfil-back-btn')?.addEventListener('click', routerBack);
   document.getElementById('perfil-signout-btn')?.addEventListener('click', async () => {
     await signOut();
     window.location.replace('./login.html');
   });
 
-  document.getElementById('perfil-avatar-input')?.addEventListener('change', handleAvatarUpload);
-
-  const bioInput = document.getElementById('perfil-bio-input');
-  if (bioInput) {
-    bioInput.addEventListener('blur', () => saveBio(bioInput.value.trim()));
-    bioInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); bioInput.blur(); }
-    });
-  }
-
-  const privateToggle = document.getElementById('perfil-private-toggle');
-  if (privateToggle) {
-    privateToggle.addEventListener('change', async () => {
-      const { error } = await sb.from('profiles')
-        .update({ is_private: privateToggle.checked })
-        .eq('id', _user.id);
-      if (error) { showToast(error.message, 'error'); privateToggle.checked = !privateToggle.checked; return; }
-      _profile = { ..._profile, is_private: privateToggle.checked };
-      showToast(privateToggle.checked ? 'Publicaciones ocultadas del feed.' : 'Publicaciones visibles en el feed.', 'success');
-    });
-  }
+  const avatarInput = document.getElementById('perfil-avatar-input');
+  avatarInput?.addEventListener('change', handleAvatarUpload);
 }
 
 // ── Abrir ─────────────────────────────────────────────────────
@@ -180,9 +44,9 @@ export async function openPerfil() {
   requestAnimationFrame(() => view.classList.add('active'));
 
   renderHero(_profile);
+  renderSuspensionBanner(_profile);
   loadStats();
   loadMyConfessions();
-  _checkSuspension();
 }
 
 function _closePerfilUI() {
@@ -193,71 +57,89 @@ function _closePerfilUI() {
   _onBack?.();
 }
 
-export function closePerfil() { _closePerfilUI(); }
-
-// ── Banner de suspensión ──────────────────────────────────────
-async function _checkSuspension() {
-  if (!_user) return;
-  const { data } = await sb
-    .from('profiles')
-    .select('suspended_until, suspension_reason')
-    .eq('id', _user.id)
-    .single();
-
-  const banner = document.getElementById('perfil-suspension-banner');
-  const detail = document.getElementById('perfil-suspension-detail');
-  if (!banner) return;
-
-  if (data?.suspended_until && new Date(data.suspended_until) > new Date()) {
-    const until = new Date(data.suspended_until);
-    const diff  = Math.max(0, until - Date.now());
-    banner.hidden = false;
-    if (detail) {
-      detail.textContent = `Motivo: ${data.suspension_reason || 'Sin especificar'} · Expira en ${_fmtDiff(diff)}`;
-    }
-    // Actualizar _profile con estado de suspensión
-    _profile = { ..._profile, suspended_until: data.suspended_until, suspension_reason: data.suspension_reason };
-  } else {
-    banner.hidden = true;
-  }
+export function closePerfil() {
+  _closePerfilUI();
 }
 
 // ── Hero ──────────────────────────────────────────────────────
 function renderHero(p) {
   if (!p) return;
-  const alias = p.reg_number ? `Anonymous_${p.reg_number}` : (p.full_name || 'Anonymous');
-  document.getElementById('perfil-name').textContent     = alias;
-  document.getElementById('perfil-email').textContent    = _user.email;
+  const anonNum  = p.anonymous_number ?? '?';
+  const nameEl   = document.getElementById('perfil-name');
+  const emailEl  = document.getElementById('perfil-email');
+  if (nameEl)  nameEl.textContent  = `Anónimo_${anonNum}`;
+  if (emailEl) emailEl.textContent = _user.email;
   document.getElementById('perfil-initials').textContent = getInitials(p.full_name);
   document.getElementById('perfil-admin-badge').hidden   = !p.is_admin;
 
-  const bioInput = document.getElementById('perfil-bio-input');
-  if (bioInput) bioInput.value = p.bio || '';
-
-  const privateToggle = document.getElementById('perfil-private-toggle');
-  if (privateToggle) privateToggle.checked = !!p.is_private;
-
   const img = document.getElementById('perfil-avatar-img');
   if (p.avatar_url) {
-    img.src = p.avatar_url; img.hidden = false;
+    img.src = p.avatar_url;
+    img.hidden = false;
     document.getElementById('perfil-initials').hidden = true;
   } else {
     img.hidden = true;
     document.getElementById('perfil-initials').hidden = false;
   }
+
+  // Bio editor
+  _renderBioEditor(p.bio || '');
 }
 
-// ── Bio ───────────────────────────────────────────────────────
-async function saveBio(bio) {
-  const prev = _profile?.bio || '';
-  if (bio === prev) return;
-  const { error } = await sb.from('profiles').update({ bio }).eq('id', _user.id);
-  if (error) { showToast(error.message, 'error'); return; }
-  _profile = { ..._profile, bio };
-  showToast('Bio actualizada.', 'success');
+// ── Banner suspensión ─────────────────────────────────────────
+function renderSuspensionBanner(p) {
+  const existing = document.getElementById('perfil-suspension-banner');
+  existing?.remove();
+
+  if (!p?.suspended_until) return;
+  const until = new Date(p.suspended_until);
+  if (until <= new Date()) return;
+
+  const diff = Math.ceil((until - Date.now()) / 86400000);
+  const banner = document.createElement('div');
+  banner.id        = 'perfil-suspension-banner';
+  banner.className = 'perfil-suspension-banner';
+  banner.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.008v.008H12v-.008z"/></svg>
+  <span>Estás suspendido — quedan <strong>${diff} día${diff !== 1 ? 's' : ''}</strong>. Durante este periodo no puedes confesar, comentar ni reaccionar.</span>`;
+
+  const view = document.getElementById('view-perfil');
+  const hero  = view?.querySelector('.profile-hero');
+  if (hero) hero.insertAdjacentElement('beforebegin', banner);
 }
 
-// ── Stats (incluye seguidores) ────────────────────────────────
+// ── Bio editor ────────────────────────────────────────────────
+function _renderBioEditor(currentBio) {
+  const slot = document.getElementById('perfil-bio-slot');
+  if (!slot) return;
+  while (slot.firstChild) slot.removeChild(slot.firstChild);
+
+  const textarea = document.createElement('textarea');
+  textarea.className   = 'perfil-bio-input';
+  textarea.placeholder = 'Escribe una biografía…';
+  textarea.maxLength   = 280;
+  textarea.value       = currentBio;
+  textarea.rows        = 3;
+  textarea.setAttribute('aria-label', 'Biografía');
+
+  const saveBtn = document.createElement('button');
+  saveBtn.type      = 'button';
+  saveBtn.className = 'perfil-bio-save-btn';
+  saveBtn.textContent = 'Guardar bio';
+
+  saveBtn.addEventListener('click', async () => {
+    const bio = textarea.value.trim();
+    const { error } = await sb.from('profiles').update({ bio }).eq('id', _user.id);
+    if (error) { showToast(error.message, 'error'); return; }
+    _profile = { ..._profile, bio };
+    showToast('Biografía guardada.', 'success');
+  });
+
+  slot.appendChild(textarea);
+  slot.appendChild(saveBtn);
+}
+
+
+// ── Stats ─────────────────────────────────────────────────────
 async function loadStats() {
   const [{ count: c1 }, { count: c2 }, { count: followers }] = await Promise.all([
     sb.from('confessions').select('id', { count: 'exact', head: true }).eq('user_id', _user.id),
@@ -269,20 +151,13 @@ async function loadStats() {
   document.getElementById('perfil-stat-followers').textContent = followers ?? 0;
 
   const { data: myIds } = await sb.from('confessions').select('id').eq('user_id', _user.id);
-  const ids = myIds?.map(r => r.id) || [];
-
-  if (ids.length) {
-    const [{ count: lk }, { count: cv }] = await Promise.all([
-      sb.from('likes').select('id', { count: 'exact', head: true }).in('confession_id', ids),
-      sb.from('confession_views').select('id', { count: 'exact', head: true }).in('confession_id', ids),
-    ]);
+  if (myIds?.length) {
+    const { count: lk } = await sb.from('likes')
+      .select('id', { count: 'exact', head: true })
+      .in('confession_id', myIds.map(r => r.id));
     document.getElementById('perfil-stat-likes').textContent = lk ?? 0;
-    const viewsEl = document.getElementById('perfil-stat-views');
-    if (viewsEl) viewsEl.textContent = cv ?? 0;
   } else {
     document.getElementById('perfil-stat-likes').textContent = '0';
-    const viewsEl = document.getElementById('perfil-stat-views');
-    if (viewsEl) viewsEl.textContent = '0';
   }
 }
 
@@ -291,47 +166,207 @@ async function loadMyConfessions() {
   const feed = document.getElementById('perfil-feed');
   while (feed.firstChild) feed.removeChild(feed.firstChild);
   feed.appendChild(Object.assign(document.createElement('p'), { className: 'feed-empty', textContent: 'Cargando…' }));
-  const { loadConfessions } = await import('./feed.js');
-  await loadConfessions(feed, _user.id);
+
+  const { data, error } = await sb
+    .from('confessions')
+    .select('id, user_id, content, image_url, hashtag, created_at')
+    .eq('user_id', _user.id)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  while (feed.firstChild) feed.removeChild(feed.firstChild);
+
+  if (error || !data?.length) {
+    feed.appendChild(Object.assign(document.createElement('p'), {
+      className: 'feed-empty',
+      textContent: error ? 'Error al cargar.' : 'Aún no has publicado ninguna confesión.',
+    }));
+    return;
+  }
+
+  const ids = data.map(c => c.id);
+  const [{ data: lk }, { data: cm }, { data: myLikes }] = await Promise.all([
+    sb.from('likes').select('confession_id').in('confession_id', ids),
+    sb.from('comments').select('confession_id').in('confession_id', ids),
+    sb.from('likes').select('confession_id').eq('user_id', _user.id).in('confession_id', ids),
+  ]);
+
+  const likeMap  = countMap(lk,      'confession_id');
+  const cmMap    = countMap(cm,      'confession_id');
+  const likedSet = new Set(myLikes?.map(r => r.confession_id) || []);
+
+  data.forEach(c => feed.appendChild(buildCard(c, likeMap[c.id]||0, cmMap[c.id]||0, likedSet.has(c.id))));
+}
+
+// ── Card ──────────────────────────────────────────────────────
+function buildCard(c, likeCount, commentCount, isLiked) {
+  const card = document.createElement('article');
+  card.className = 'rc-card';
+
+  const top = document.createElement('div');
+  top.className = 'rc-card__top';
+
+  const av = document.createElement('div');
+  av.className = 'rc-card__avatar';
+  if (_profile?.avatar_url) {
+    const img = document.createElement('img');
+    img.src = _profile.avatar_url; img.alt = 'Avatar'; img.loading = 'lazy';
+    av.appendChild(img);
+  } else { av.appendChild(Icons.user(14)); }
+  top.appendChild(av);
+
+  const { bg, fg } = tagColor(c.hashtag || '#Confesión');
+  const pill = document.createElement('span');
+  pill.className = 'rc-card__tag';
+  pill.textContent = c.hashtag || '#Confesión';
+  pill.style.background = bg; pill.style.color = fg;
+  top.appendChild(pill);
+
+  const time = document.createElement('span');
+  time.className = 'rc-card__time';
+  time.textContent = formatDate(c.created_at);
+  top.appendChild(time);
+
+  const del = document.createElement('button');
+  del.className = 'rc-card__del'; del.type = 'button';
+  del.appendChild(Icons.trash(15));
+  del.addEventListener('click', e => { e.stopPropagation(); deleteConfession(c.id, card); });
+  top.appendChild(del);
+  card.appendChild(top);
+
+  const body = document.createElement('div');
+  body.className = 'rc-card__body-row';
+  const text = document.createElement('p');
+  text.className = 'rc-card__text'; text.textContent = c.content;
+  body.appendChild(text);
+
+  if (c.image_url) {
+    const thumb = document.createElement('div');
+    thumb.className = 'rc-card__thumb';
+    const img = document.createElement('img');
+    img.src = c.image_url; img.alt = 'Imagen'; img.loading = 'lazy';
+    img.addEventListener('click', e => { e.stopPropagation(); openImageModal(c.image_url); });
+    thumb.appendChild(img);
+    body.appendChild(thumb);
+  }
+  card.appendChild(body);
+
+  const footer = document.createElement('div');
+  footer.className = 'rc-card__footer';
+
+  const likeBtn = document.createElement('button');
+  likeBtn.className = `rc-card__action${isLiked ? ' rc-card__action--liked' : ''}`;
+  likeBtn.type = 'button';
+  likeBtn.appendChild(Icons.heart(isLiked, 17));
+  const lkSpan = Object.assign(document.createElement('span'), { className: 'rc-card__action-count', textContent: String(likeCount) });
+  likeBtn.appendChild(lkSpan);
+  likeBtn.addEventListener('click', e => { e.stopPropagation(); toggleLike(c.id, likeBtn); });
+  footer.appendChild(likeBtn);
+
+  const cmBtn = document.createElement('button');
+  cmBtn.className = 'rc-card__action'; cmBtn.type = 'button';
+  cmBtn.appendChild(Icons.chat(17));
+  cmBtn.appendChild(Object.assign(document.createElement('span'), { className: 'rc-card__action-count', textContent: String(commentCount) }));
+  footer.appendChild(cmBtn);
+
+  card.appendChild(footer);
+  return card;
+}
+
+async function toggleLike(cid, btn) {
+  const liked = btn.classList.contains('rc-card__action--liked');
+  const sp    = btn.querySelector('.rc-card__action-count');
+  const n     = parseInt(sp.textContent) || 0;
+  const swap  = f => { const o = btn.querySelector('svg'); if (o) btn.replaceChild(Icons.heart(f, 17), o); };
+  if (liked) {
+    btn.classList.remove('rc-card__action--liked'); swap(false); sp.textContent = String(n - 1);
+    await sb.from('likes').delete().match({ confession_id: cid, user_id: _user.id });
+  } else {
+    btn.classList.add('rc-card__action--liked'); swap(true); sp.textContent = String(n + 1);
+    btn.classList.add('rc-card__action--pop');
+    btn.addEventListener('animationend', () => btn.classList.remove('rc-card__action--pop'), { once: true });
+    await sb.from('likes').insert({ confession_id: cid, user_id: _user.id });
+  }
+}
+
+async function deleteConfession(id, cardEl) {
+  if (!confirm('¿Borrar esta confesión? No se puede deshacer.')) return;
+  const { error } = await sb.from('confessions').delete().eq('id', id).eq('user_id', _user.id);
+  if (error) { showToast(error.message, 'error'); return; }
+  cardEl.remove();
+  const s = document.getElementById('perfil-stat-conf');
+  s.textContent = Math.max(0, parseInt(s.textContent) - 1);
+  showToast('Confesión eliminada.', 'success');
 }
 
 // ── Avatar upload ─────────────────────────────────────────────
 async function handleAvatarUpload(e) {
   const file = e.target.files?.[0];
   if (!file) return;
-  const track  = document.getElementById('perfil-avatar-track');
-  const bar    = document.getElementById('perfil-avatar-bar');
-  const status = document.getElementById('perfil-avatar-status');
-  if (track) track.hidden = false;
-  if (status) status.textContent = 'Subiendo…';
+
+  const track     = document.getElementById('perfil-avatar-track');
+  const bar       = document.getElementById('perfil-avatar-bar');
+  const status    = document.getElementById('perfil-avatar-status');
+  const avatarWrap = document.querySelector('.profile-avatar-wrap');
+
+  // Mostrar estado de carga en el avatar
+  avatarWrap?.classList.add('profile-avatar-wrap--loading');
+  track.hidden = false;
+  bar.style.width = '0%';
+  status.textContent = 'Subiendo…';
+
   try {
-    const url = await uploadImage(file, (pct) => { if (bar) bar.style.width = `${pct}%`; });
+    const url = await uploadImage(file, pct => { bar.style.width = pct + '%'; });
+
     const { error } = await sb.from('profiles').update({ avatar_url: url }).eq('id', _user.id);
     if (error) throw new Error(error.message);
+
+    // Añadir cache-buster para forzar recarga del img aunque la URL sea igual
+    const cacheBustedUrl = url.includes('?')
+      ? `${url}&_t=${Date.now()}`
+      : `${url}?_t=${Date.now()}`;
+
     _profile = { ..._profile, avatar_url: url };
-    renderHero(_profile);
-    if (_chipSlot) renderHeaderChip(_chipSlot, _profile, () => {});
-    if (status) status.textContent = '¡Foto actualizada!';
-    setTimeout(() => { if (status) status.textContent = ''; }, 3000);
+
+    // Actualizar hero con URL con cache-buster para refrescar el <img>
+    const heroImg = document.getElementById('perfil-avatar-img');
+    if (heroImg) {
+      heroImg.src = cacheBustedUrl;
+      heroImg.hidden = false;
+      document.getElementById('perfil-initials').hidden = true;
+    }
+
+    // Actualizar chip del header
+    renderHeaderChip(_chipSlot, _profile, () => window.location.replace('./login.html'));
+
+    status.textContent = '✓ Foto actualizada';
+    setTimeout(() => { status.textContent = ''; }, 3000);
   } catch (err) {
     showToast(err.message, 'error');
-    if (status) status.textContent = '';
+    status.textContent = '';
   } finally {
-    if (track) track.hidden = true;
-    if (bar)   bar.style.width = '0%';
-    e.target.value = '';
+    avatarWrap?.classList.remove('profile-avatar-wrap--loading');
+    track.hidden = true;
+    bar.style.width = '0%';
+    document.getElementById('perfil-avatar-input').value = '';
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────
-function _fmtDiff(ms) {
-  if (ms <= 0) return 'expirada';
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const h = Math.floor(m / 60);
-  const d = Math.floor(h / 24);
-  if (d > 0) return `${d}d ${h % 24}h`;
-  if (h > 0) return `${h}h ${m % 60}m`;
-  if (m > 0) return `${m}m`;
-  return `${s}s`;
+// ── Image modal ───────────────────────────────────────────────
+function openImageModal(url) {
+  document.getElementById('img-modal')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'img-modal'; overlay.className = 'img-modal';
+  const img = document.createElement('img');
+  img.src = url; img.className = 'img-modal__img'; img.alt = 'Imagen';
+  const btn = document.createElement('button');
+  btn.className = 'img-modal__close'; btn.type = 'button';
+  btn.appendChild(Icons.close(20));
+  const close = () => overlay.remove();
+  btn.addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); }, { once: true });
+  overlay.appendChild(btn); overlay.appendChild(img);
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('img-modal--open'));
 }
