@@ -2,21 +2,13 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "routes": [
-{
+    {
       "src": "/login",
       "dest": "/#login"
     },
     {
       "src": "/",
       "dest": "/index.html"
-    },
-    {
-      "src": "reconfessions/login",
-      "dest": "reconfessions/#login"
-    },
-    {
-      "src": "reconfessions/",
-      "dest": "reconfessions/index.html"
     }
   ],
   "headers": [
