@@ -955,6 +955,248 @@ body:has(.login-page) {
 .admin-action-btn--warning { color: var(--warning,#f59e0b); }
 .admin-action-btn--success { color: var(--success,#22c55e); }
 
+
+/* ════════════════════════════════════════════════════════════
+   NUEVOS ESTILOS — autor sticky + perfil sticky/dropdown
+   ════════════════════════════════════════════════════════════ */
+
+/* ── Autor: sticky bar (aparece al hacer scroll) ─────────────── */
+.autor-sticky-bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--bg, #0e0e12);
+  border-bottom: 1px solid transparent;
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.25s cubic-bezier(0.4,0,0.2,1),
+              opacity 0.2s ease,
+              border-color 0.2s ease;
+  will-change: transform;
+}
+.autor-sticky-bar--visible {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+  border-color: var(--border, rgba(255,255,255,0.08));
+}
+
+/* Avatar tamaños */
+.autor-avatar--lg {
+  width: 76px;
+  height: 76px;
+}
+.autor-avatar--sm {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.autor-avatar--sm img { width: 100%; height: 100%; object-fit: cover; }
+
+.autor-avatar__initials--sm {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+
+/* Info dentro de la sticky bar */
+.autor-sticky-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.autor-sticky-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.autor-sticky-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.autor-sticky-stat {
+  font-size: 0.72rem;
+  color: var(--text-3);
+}
+.autor-sticky-stat strong {
+  color: var(--text-1);
+  font-weight: 700;
+}
+
+/* Hero expandido: se "colapsa" suavemente al hacer scroll */
+.autor-hero {
+  transition: padding 0.25s ease, gap 0.25s ease;
+}
+.autor-hero--collapsed {
+  padding-top: 10px;
+  padding-bottom: 8px;
+  gap: 6px;
+}
+.autor-hero--collapsed .autor-avatar-wrap { display: none; }
+.autor-hero--collapsed .autor-bio         { display: none; }
+
+/* ── Perfil: sticky bar (igual que autor) ────────────────────── */
+.perfil-sticky-bar {
+  position: sticky;
+  top: 56px; /* debajo del app-header */
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--bg, #0e0e12);
+  border-bottom: 1px solid transparent;
+  transform: translateY(-120%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.25s cubic-bezier(0.4,0,0.2,1),
+              opacity 0.2s ease,
+              border-color 0.2s ease;
+}
+.perfil-sticky-bar--visible {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+  border-color: var(--border, rgba(255,255,255,0.08));
+}
+
+/* Hero del perfil: transición suave al colapso */
+.perfil-hero--scrolled .profile-avatar-wrap {
+  /* La foto se mantiene en el sticky bar, aquí sólo reducimos gap */
+  margin-bottom: 0;
+}
+
+/* ── Perfil: dropdown personalizado ──────────────────────────── */
+.perfil-options-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  background: var(--bg-card, #1c1a25);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+  z-index: 500;
+  overflow: hidden;
+  animation: dropdownIn 0.15s ease both;
+}
+
+.perfil-options-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 16px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-1);
+  cursor: pointer;
+  font-family: inherit;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s;
+}
+.perfil-options-item:active { background: rgba(255,255,255,0.05); }
+.perfil-options-item svg { flex-shrink: 0; opacity: 0.75; }
+
+.perfil-options-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 2px 0;
+}
+
+/* ── Bio bottom sheet ────────────────────────────────────────── */
+.bio-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.bio-sheet-overlay--open { opacity: 1; }
+
+.bio-sheet {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-card, #1c1a25);
+  border-radius: 20px 20px 0 0;
+  padding: 20px 20px calc(env(safe-area-inset-bottom, 0px) + 20px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transform: translateY(40px);
+  transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+.bio-sheet-overlay--open .bio-sheet { transform: translateY(0); }
+
+.bio-sheet__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-1);
+  margin: 0;
+}
+
+.bio-sheet__counter {
+  font-size: 0.72rem;
+  color: var(--text-3);
+  text-align: right;
+  margin-top: -6px;
+}
+
+.bio-sheet__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.bio-sheet__btn {
+  padding: 10px 22px;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+  transition: opacity 0.15s;
+}
+.bio-sheet__btn:active { opacity: 0.75; }
+.bio-sheet__btn--cancel {
+  background: var(--bg, #0e0e12);
+  color: var(--text-2);
+  border: 1.5px solid var(--border);
+}
+.bio-sheet__btn--save {
+  background: var(--accent, #9b7fff);
+  color: #fff;
+}
+
 /* ════════════════════════════════════════════════════════════
    NUEVOS ESTILOS — v2
    ════════════════════════════════════════════════════════════ */
