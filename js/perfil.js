@@ -1,6 +1,7 @@
 // js/perfil.js
 // ============================================================
 // Vista de Perfil — SPA view dentro de index.html
+// + Gráfica de actividad semanal (Chart.js) — NUEVO
 // ============================================================
 
 import { sb }                                    from './api.js';
@@ -11,11 +12,13 @@ import { getInitials, showToast, formatDate }    from './utils.js';
 import { Icons }                                 from './icons.js';
 import { tagColor, countMap }                    from './shared.js';
 import { routerPush, routerBack }               from './router.js';
+import { openChat }                              from './chat.js';
 
 let _user    = null;
 let _profile = null;
 let _chipSlot = null;
 let _onBack   = null;
+let _activityChart = null; // Instancia Chart.js
 
 // ── Init ──────────────────────────────────────────────────────
 export async function initPerfil(user, profile, chipSlot, onBack) {
@@ -47,6 +50,7 @@ export async function openPerfil() {
   renderSuspensionBanner(_profile);
   loadStats();
   loadMyConfessions();
+  _loadActivityChart();
 }
 
 function _closePerfilUI() {
@@ -82,7 +86,6 @@ function renderHero(p) {
     document.getElementById('perfil-initials').hidden = false;
   }
 
-  // Bio editor
   _renderBioEditor(p.bio || '');
 }
 
@@ -138,7 +141,6 @@ function _renderBioEditor(currentBio) {
   slot.appendChild(saveBtn);
 }
 
-
 // ── Stats ─────────────────────────────────────────────────────
 async function loadStats() {
   const [{ count: c1 }, { count: c2 }, { count: followers }] = await Promise.all([
@@ -159,6 +161,171 @@ async function loadStats() {
   } else {
     document.getElementById('perfil-stat-likes').textContent = '0';
   }
+}
+
+// ── Gráfica de actividad semanal ──────────────────────────────
+async function _loadActivityChart() {
+  // Asegurar Chart.js disponible
+  if (!window.Chart) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+      s.onload  = resolve;
+      s.onerror = () => reject(new Error('Chart.js no disponible'));
+      document.head.appendChild(s);
+    }).catch(err => { console.warn('[perfil chart]', err); return; });
+  }
+  if (!window.Chart) return;
+
+  // Calcular rango: últimos 7 días
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(today.getDate() - 6);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
+
+  const since = sevenDaysAgo.toISOString();
+
+  const [{ data: confData }, { data: cmData }] = await Promise.all([
+    sb.from('confessions')
+      .select('created_at')
+      .eq('user_id', _user.id)
+      .gte('created_at', since),
+    sb.from('comments')
+      .select('created_at')
+      .eq('user_id', _user.id)
+      .gte('created_at', since),
+  ]);
+
+  // Construir arrays de 7 días
+  const days    = [];
+  const labels  = [];
+  const DAYS_ES = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+    labels.push(i === 0 ? 'Hoy' : DAYS_ES[d.getDay()]);
+  }
+
+  const countByDay = (rows) => {
+    const map = {};
+    rows?.forEach(r => {
+      const day = r.created_at.slice(0, 10);
+      map[day] = (map[day] || 0) + 1;
+    });
+    return days.map(d => map[d] || 0);
+  };
+
+  const confCounts = countByDay(confData);
+  const cmCounts   = countByDay(cmData);
+
+  // Renderizar contenedor si no existe
+  let chartSlot = document.getElementById('perfil-activity-chart-slot');
+  if (!chartSlot) {
+    chartSlot = document.createElement('div');
+    chartSlot.id = 'perfil-activity-chart-slot';
+    chartSlot.className = 'perfil-chart-slot';
+
+    const title = document.createElement('p');
+    title.className = 'perfil-chart-title';
+    title.textContent = 'Actividad últimos 7 días';
+    chartSlot.appendChild(title);
+
+    const canvas = document.createElement('canvas');
+    canvas.id = 'perfil-activity-canvas';
+    canvas.setAttribute('aria-label', 'Gráfica de actividad semanal');
+    chartSlot.appendChild(canvas);
+
+    // Insertar antes de la sección de confesiones
+    const divider = document.querySelector('#view-perfil .chat-divider');
+    divider?.insertAdjacentElement('beforebegin', chartSlot);
+  }
+
+  const canvas = document.getElementById('perfil-activity-canvas');
+  if (!canvas) return;
+
+  // Destruir instancia previa si existe
+  if (_activityChart) {
+    _activityChart.destroy();
+    _activityChart = null;
+  }
+
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const gridColor   = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const tickColor   = isDark ? '#9891b0' : '#6b6480';
+  const accentColor = '#9b7fff';
+  const amberColor  = '#e8a838';
+
+  _activityChart = new window.Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Confesiones',
+          data: confCounts,
+          backgroundColor: `${accentColor}cc`,
+          borderColor: accentColor,
+          borderWidth: 1,
+          borderRadius: 4,
+          borderSkipped: false,
+        },
+        {
+          label: 'Comentarios',
+          data: cmCounts,
+          backgroundColor: `${amberColor}99`,
+          borderColor: amberColor,
+          borderWidth: 1,
+          borderRadius: 4,
+          borderSkipped: false,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      aspectRatio: 2.2,
+      animation: { duration: 500, easing: 'easeOutQuart' },
+      plugins: {
+        legend: {
+          labels: {
+            color: tickColor,
+            font: { family: 'Inter', size: 11 },
+            boxWidth: 10,
+            padding: 12,
+          },
+        },
+        tooltip: {
+          backgroundColor: isDark ? '#1c1a25' : '#ffffff',
+          borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+          borderWidth: 1,
+          titleColor: isDark ? '#e8e4f0' : '#0a090e',
+          bodyColor: tickColor,
+          cornerRadius: 8,
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: tickColor, font: { family: 'Inter', size: 11 } },
+          grid: { color: gridColor },
+          border: { color: 'transparent' },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            color: tickColor,
+            font: { family: 'Inter', size: 11 },
+            stepSize: 1,
+            precision: 0,
+          },
+          grid: { color: gridColor },
+          border: { color: 'transparent' },
+        },
+      },
+    },
+  });
 }
 
 // ── Mis confesiones ───────────────────────────────────────────
@@ -267,10 +434,24 @@ function buildCard(c, likeCount, commentCount, isLiked) {
   cmBtn.className = 'rc-card__action'; cmBtn.type = 'button';
   cmBtn.appendChild(Icons.chat(17));
   cmBtn.appendChild(Object.assign(document.createElement('span'), { className: 'rc-card__action-count', textContent: String(commentCount) }));
+  cmBtn.addEventListener('click', e => { e.stopPropagation(); _openChatFromPerfil(c); });
   footer.appendChild(cmBtn);
 
   card.appendChild(footer);
+  card.addEventListener('click', () => _openChatFromPerfil(c));
   return card;
+}
+
+async function _openChatFromPerfil(confession) {
+  const view = document.getElementById('view-perfil');
+  view?.classList.remove('active');
+  const chatView = document.getElementById('view-chat');
+  chatView?.classList.add('active');
+  routerPush('chat', () => {
+    chatView?.classList.remove('active');
+    view?.classList.add('active');
+  });
+  await openChat(confession);
 }
 
 async function toggleLike(cid, btn) {
@@ -309,7 +490,6 @@ async function handleAvatarUpload(e) {
   const status    = document.getElementById('perfil-avatar-status');
   const avatarWrap = document.querySelector('.profile-avatar-wrap');
 
-  // Mostrar estado de carga en el avatar
   avatarWrap?.classList.add('profile-avatar-wrap--loading');
   track.hidden = false;
   bar.style.width = '0%';
@@ -321,14 +501,12 @@ async function handleAvatarUpload(e) {
     const { error } = await sb.from('profiles').update({ avatar_url: url }).eq('id', _user.id);
     if (error) throw new Error(error.message);
 
-    // Añadir cache-buster para forzar recarga del img aunque la URL sea igual
     const cacheBustedUrl = url.includes('?')
       ? `${url}&_t=${Date.now()}`
       : `${url}?_t=${Date.now()}`;
 
     _profile = { ..._profile, avatar_url: url };
 
-    // Actualizar hero con URL con cache-buster para refrescar el <img>
     const heroImg = document.getElementById('perfil-avatar-img');
     if (heroImg) {
       heroImg.src = cacheBustedUrl;
@@ -336,7 +514,6 @@ async function handleAvatarUpload(e) {
       document.getElementById('perfil-initials').hidden = true;
     }
 
-    // Actualizar chip del header
     renderHeaderChip(_chipSlot, _profile, () => window.location.replace('./login.html'));
 
     status.textContent = '✓ Foto actualizada';
