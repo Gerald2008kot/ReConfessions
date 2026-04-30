@@ -1,6 +1,8 @@
 // js/hilos.js
 // ============================================================
 // Vista de Hilos Guardados
+// + Filtro por hashtag dentro de guardados — NUEVO
+// + Ordenar por fecha de guardado o actividad reciente — NUEVO
 // ============================================================
 
 import { sb } from './api.js';
@@ -13,6 +15,11 @@ import { routerPush, routerBack } from './router.js';
 let _user = null;
 let _onBack = null;
 let _openChat = null;
+
+// Estado de filtros
+let _activeTag  = null;  // hashtag activo o null = todos
+let _sortMode   = 'saved'; // 'saved' | 'activity'
+let _allSaved   = [];    // cache de todos los guardados cargados
 
 // ── Init ──────────────────────────────────────────────────────
 export async function initHilos(user, onBack, openChatCallback) {
@@ -30,6 +37,11 @@ export async function openHilos() {
   const view = document.getElementById('view-hilos');
   view.hidden = false;
   requestAnimationFrame(() => view.classList.add('active'));
+
+  // Resetear filtros al abrir
+  _activeTag = null;
+  _sortMode  = 'saved';
+
   await loadSavedThreads();
 }
 
@@ -42,7 +54,6 @@ function _closeHilosUI() {
   _onBack?.();
 }
 
-// Alias público para cerrar desde código externo (sin pushear historial)
 export function closeHilos() {
   _closeHilosUI();
 }
@@ -59,13 +70,15 @@ async function loadSavedThreads() {
     .eq('user_id', _user.id)
     .order('created_at', { ascending: false });
 
-  while (list.firstChild) list.removeChild(list.firstChild);
+  if (error) {
+    while (list.firstChild) list.removeChild(list.firstChild);
+    list.appendChild(el('p', { className: 'feed-empty', textContent: 'Error al cargar.' }));
+    return;
+  }
 
-  if (error || !saved?.length) {
-    list.appendChild(el('p', {
-      className: 'feed-empty',
-      textContent: error ? 'Error al cargar.' : 'No tienes hilos guardados aún.',
-    }));
+  if (!saved?.length) {
+    while (list.firstChild) list.removeChild(list.firstChild);
+    list.appendChild(el('p', { className: 'feed-empty', textContent: 'No tienes hilos guardados aún.' }));
     return;
   }
 
@@ -73,11 +86,12 @@ async function loadSavedThreads() {
 
   const [{ data: confessions }, { data: cmCounts }] = await Promise.all([
     sb.from('confessions')
-      .select('id, user_id, content, image_url, hashtag, created_at')
+      .select('id, user_id, content, image_url, hashtag, hashtags, created_at')
       .in('id', confessionIds),
     sb.from('comments')
-      .select('confession_id')
-      .in('confession_id', confessionIds),
+      .select('confession_id, created_at')
+      .in('confession_id', confessionIds)
+      .order('created_at', { ascending: false }),
   ]);
 
   const userIds = [...new Set((confessions || []).map(c => c.user_id))];
@@ -86,18 +100,145 @@ async function loadSavedThreads() {
     : { data: [] };
   const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]));
 
-  const cmMap = {};
-  cmCounts?.forEach(r => { cmMap[r.confession_id] = (cmMap[r.confession_id] || 0) + 1; });
+  // Contar comentarios y hallar última actividad
+  const cmMap         = {};
+  const lastActivityMap = {};
+  cmCounts?.forEach(r => {
+    cmMap[r.confession_id] = (cmMap[r.confession_id] || 0) + 1;
+    if (!lastActivityMap[r.confession_id]) {
+      lastActivityMap[r.confession_id] = r.created_at;
+    }
+  });
 
   const confMap = Object.fromEntries((confessions || []).map(c => [c.id, c]));
 
-  for (const save of saved) {
-    const confession = confMap[save.confession_id];
-    if (!confession) continue;
-    const commentCount = cmMap[save.confession_id] || 0;
+  // Construir datos enriquecidos
+  _allSaved = saved.map(save => {
+    const confession   = confMap[save.confession_id];
+    if (!confession) return null;
     const authorProfile = profileMap[confession.user_id] || null;
-    list.appendChild(buildThreadRow(save, confession, commentCount, authorProfile));
+    return {
+      save,
+      confession,
+      commentCount:  cmMap[save.confession_id] || 0,
+      lastActivity:  lastActivityMap[save.confession_id] || confession.created_at,
+      authorProfile,
+    };
+  }).filter(Boolean);
+
+  while (list.firstChild) list.removeChild(list.firstChild);
+  _renderControls(list);
+  _renderFilteredList(list);
+}
+
+// ── Controles de filtro y orden ───────────────────────────────
+function _renderControls(list) {
+  const controls = el('div', { className: 'hilos-controls' });
+
+  // ── Selector de orden ─────────────────────────────────────
+  const sortRow = el('div', { className: 'hilos-sort-row' });
+
+  const sortSaved = el('button', {
+    className: `hilos-sort-btn${_sortMode === 'saved' ? ' hilos-sort-btn--active' : ''}`,
+    attrs: { type: 'button' },
+  });
+  sortSaved.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg> Fecha guardado`;
+  sortSaved.addEventListener('click', () => { _sortMode = 'saved'; _rerenderControls(); });
+  sortRow.appendChild(sortSaved);
+
+  const sortActivity = el('button', {
+    className: `hilos-sort-btn${_sortMode === 'activity' ? ' hilos-sort-btn--active' : ''}`,
+    attrs: { type: 'button' },
+  });
+  sortActivity.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Actividad reciente`;
+  sortActivity.addEventListener('click', () => { _sortMode = 'activity'; _rerenderControls(); });
+  sortRow.appendChild(sortActivity);
+
+  controls.appendChild(sortRow);
+
+  // ── Chips de hashtag ──────────────────────────────────────
+  const usedTags = [...new Set(
+    _allSaved.flatMap(item => {
+      const c = item.confession;
+      if (c.hashtags?.length) return c.hashtags;
+      if (c.hashtag) return [c.hashtag];
+      return ['#Confesión'];
+    })
+  )];
+
+  if (usedTags.length > 1) {
+    const chipRow = el('div', { className: 'hilos-tag-chips' });
+
+    const allChip = el('button', {
+      className: `hilos-tag-chip${_activeTag === null ? ' hilos-tag-chip--active' : ''}`,
+      textContent: 'Todos',
+      attrs: { type: 'button' },
+    });
+    allChip.addEventListener('click', () => { _activeTag = null; _rerenderControls(); });
+    chipRow.appendChild(allChip);
+
+    usedTags.forEach(tag => {
+      const { bg, fg } = tagColor(tag);
+      const chip = el('button', {
+        className: `hilos-tag-chip${_activeTag === tag ? ' hilos-tag-chip--active' : ''}`,
+        textContent: tag,
+        attrs: { type: 'button' },
+      });
+      if (_activeTag !== tag) {
+        chip.style.setProperty('--chip-bg', bg);
+        chip.style.setProperty('--chip-fg', fg);
+      }
+      chip.addEventListener('click', () => { _activeTag = tag; _rerenderControls(); });
+      chipRow.appendChild(chip);
+    });
+
+    controls.appendChild(chipRow);
   }
+
+  list.appendChild(controls);
+}
+
+function _rerenderControls() {
+  const list = document.getElementById('hilos-list');
+  if (!list) return;
+  // Eliminar controles y cards actuales, mantener el wrapper del contenedor
+  while (list.firstChild) list.removeChild(list.firstChild);
+  _renderControls(list);
+  _renderFilteredList(list);
+}
+
+// ── Renderizar lista filtrada y ordenada ──────────────────────
+function _renderFilteredList(list) {
+  let items = [..._allSaved];
+
+  // Filtrar por hashtag
+  if (_activeTag) {
+    items = items.filter(({ confession: c }) => {
+      const tags = c.hashtags?.length ? c.hashtags : (c.hashtag ? [c.hashtag] : ['#Confesión']);
+      return tags.includes(_activeTag);
+    });
+  }
+
+  // Ordenar
+  if (_sortMode === 'activity') {
+    items.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
+  } else {
+    items.sort((a, b) => new Date(b.save.created_at) - new Date(a.save.created_at));
+  }
+
+  if (!items.length) {
+    list.appendChild(el('p', {
+      className: 'feed-empty',
+      textContent: _activeTag
+        ? `No tienes hilos guardados con ${_activeTag}.`
+        : 'No tienes hilos guardados aún.',
+    }));
+    return;
+  }
+
+  items.forEach(({ save, confession, commentCount, authorProfile }) => {
+    list.appendChild(buildThreadRow(save, confession, commentCount, authorProfile));
+  });
 }
 
 // ── Card de hilo guardado ─────────────────────────────────────
@@ -173,10 +314,15 @@ function buildThreadRow(save, confession, commentCount, authorProfile) {
 async function removeSaved(saveId, cardEl) {
   const { error } = await sb.from('saved_threads').delete().eq('id', saveId);
   if (error) { showToast(error.message, 'error'); return; }
+
+  // Actualizar cache local
+  _allSaved = _allSaved.filter(item => item.save.id !== saveId);
   cardEl.remove();
+
   const list = document.getElementById('hilos-list');
-  if (!list.querySelector('.hilos-card')) {
-    list.appendChild(el('p', { className: 'feed-empty', textContent: 'No tienes hilos guardados aún.' }));
+  if (list && !list.querySelector('.hilos-card')) {
+    // Si ya no quedan cards tras filtrar, rerenderizar
+    _rerenderControls();
   }
   showToast('Hilo eliminado de guardados.', 'success');
   updateHilosCount();
@@ -243,10 +389,7 @@ function openImageModal(url) {
   btn.className = 'img-modal__close'; btn.type = 'button';
   btn.appendChild(Icons.close(20));
 
-  const close = () => {
-    overlay.remove();
-  };
-
+  const close = () => overlay.remove();
   btn.addEventListener('click', close);
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); }, { once: true });
