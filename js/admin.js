@@ -8,6 +8,7 @@ import { sb } from './api.js';
 import { getCurrentUser, getProfile } from './auth.js';
 import { el, formatDate, showToast, getInitials } from './utils.js';
 import { Icons } from './icons.js';
+import { openAutor } from './autor.js';
 
 let currentUser = null;
 let currentProfile = null;
@@ -74,7 +75,7 @@ async function loadUsers() {
   
   const { data, error } = await sb
     .from('profiles')
-    .select('id, full_name, avatar_url, is_admin, created_at')
+    .select('id, full_name, avatar_url, is_admin, created_at, suspended_until')
     .order('created_at', { ascending: false });
   
   if (error) { showToast('Error cargando usuarios.', 'error'); return; }
@@ -97,7 +98,15 @@ async function loadUsers() {
   
   data.forEach(profile => {
     const isSelf = profile.id === currentUser.id;
-    const row = el('div', { className: 'admin-user-row' });
+    const isSuspended = profile.suspended_until && new Date(profile.suspended_until) > new Date();
+    const row = el('div', { className: 'admin-user-row', attrs: { style: 'cursor:pointer' } });
+    
+    // Click en la row abre Autor
+    row.addEventListener('click', (e) => {
+      // No abrir autor si se hizo click en un botón de acción
+      if (e.target.closest('.admin-user-row__actions')) return;
+      openAutor(profile.id, 'admin');
+    });
     
     // Avatar
     const av = el('div', { className: 'admin-user-row__avatar' });
@@ -121,6 +130,10 @@ async function loadUsers() {
     if (isSelf) {
       nameRow.appendChild(el('span', { className: 'admin-badge admin-badge--you', textContent: 'Tú' }));
     }
+    if (isSuspended) {
+      const diff = Math.ceil((new Date(profile.suspended_until) - Date.now()) / 86400000);
+      nameRow.appendChild(el('span', { className: 'admin-badge admin-badge--suspended', textContent: `Suspendido ${diff}d` }));
+    }
     info.appendChild(nameRow);
     info.appendChild(el('span', {
       className: 'admin-user-row__meta',
@@ -140,6 +153,25 @@ async function loadUsers() {
       adminToggleBtn.appendChild(el('span', { textContent: profile.is_admin ? '★' : '☆' }));
       adminToggleBtn.addEventListener('click', () => toggleAdmin(profile.id, profile.is_admin, adminToggleBtn, nameRow));
       actions.appendChild(adminToggleBtn);
+
+      // Suspender / Desuspender
+      if (isSuspended) {
+        const unsuspBtn = el('button', {
+          className: 'admin-action-btn admin-action-btn--success',
+          attrs: { type: 'button', title: 'Desuspender usuario' },
+          textContent: '✓',
+        });
+        unsuspBtn.addEventListener('click', () => unsuspendUserAdmin(profile.id, row));
+        actions.appendChild(unsuspBtn);
+      } else {
+        const suspBtn = el('button', {
+          className: 'admin-action-btn admin-action-btn--warning',
+          attrs: { type: 'button', title: 'Suspender usuario' },
+          textContent: '□',
+        });
+        suspBtn.addEventListener('click', (e) => { e.stopPropagation(); openSuspendModalAdmin(profile.id, row, nameRow); });
+        actions.appendChild(suspBtn);
+      }
       
       // Delete user
       const deleteBtn = el('button', {
@@ -160,11 +192,6 @@ async function loadUsers() {
 // ── Toggle admin ──────────────────────────────────────────────
 async function toggleAdmin(userId, isCurrentlyAdmin, btn, nameRow) {
   const newValue = !isCurrentlyAdmin;
-  const confirmMsg = newValue ?
-    '¿Dar permisos de administrador a este usuario?' :
-    '¿Quitar permisos de administrador a este usuario?';
-  if (!confirm(confirmMsg)) return;
-  
   const { error } = await sb.from('profiles').update({ is_admin: newValue }).eq('id', userId);
   if (error) { showToast(error.message, 'error'); return; }
   
@@ -265,6 +292,72 @@ function buildCountMap(rows, key) {
   const map = {};
   rows?.forEach(r => { map[r[key]] = (map[r[key]] || 0) + 1; });
   return map;
+}
+
+// ── Suspender usuario (modal) ─────────────────────────────────
+function openSuspendModalAdmin(userId, rowEl, nameRow) {
+  const DAYS_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 15, 21, 30];
+  let selectedDays = null;
+
+  const overlay = el('div', { className: 'rc-modal-overlay', attrs: { id: 'admin-suspend-modal' } });
+  const modal   = el('div', { className: 'rc-modal' });
+
+  modal.appendChild(el('h3', { className: 'rc-modal__title', textContent: 'Suspender usuario' }));
+  modal.appendChild(el('p', { className: 'rc-modal__subtitle', textContent: 'Selecciona la duración:' }));
+
+  const grid = el('div', { className: 'rc-modal__days-grid' });
+  DAYS_OPTIONS.forEach(days => {
+    const btn = el('button', {
+      className: 'rc-modal__day-btn',
+      textContent: `${days} día${days > 1 ? 's' : ''}`,
+      attrs: { type: 'button' },
+    });
+    btn.addEventListener('click', () => {
+      grid.querySelectorAll('.rc-modal__day-btn').forEach(b => b.classList.remove('rc-modal__day-btn--selected'));
+      btn.classList.add('rc-modal__day-btn--selected');
+      selectedDays = days;
+    });
+    grid.appendChild(btn);
+  });
+  modal.appendChild(grid);
+
+  const footer = el('div', { className: 'rc-modal__footer' });
+  const cancelBtn  = el('button', { className: 'rc-modal__btn rc-modal__btn--cancel', textContent: 'Cancelar', attrs: { type: 'button' } });
+  const confirmBtn = el('button', { className: 'rc-modal__btn rc-modal__btn--danger', textContent: 'Suspender', attrs: { type: 'button' } });
+
+  const close = () => overlay.remove();
+  cancelBtn.addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  confirmBtn.addEventListener('click', async () => {
+    if (!selectedDays) { showToast('Selecciona una duración.', 'info'); return; }
+    const until = new Date(Date.now() + selectedDays * 86400000).toISOString();
+    const { error } = await sb.from('profiles').update({ suspended_until: until }).eq('id', userId);
+    if (error) { showToast(error.message, 'error'); return; }
+    showToast(`Usuario suspendido por ${selectedDays} día${selectedDays > 1 ? 's' : ''}.`, 'success');
+    close();
+    // Actualizar badge en la row
+    const existing = nameRow.querySelector('.admin-badge--suspended');
+    if (!existing) {
+      nameRow.appendChild(el('span', { className: 'admin-badge admin-badge--suspended', textContent: `Suspendido ${selectedDays}d` }));
+    }
+    rowEl.remove();
+    loadUsers(); // recargar lista
+  });
+
+  footer.appendChild(cancelBtn);
+  footer.appendChild(confirmBtn);
+  modal.appendChild(footer);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('rc-modal-overlay--open'));
+}
+
+async function unsuspendUserAdmin(userId, rowEl) {
+  const { error } = await sb.from('profiles').update({ suspended_until: null }).eq('id', userId);
+  if (error) { showToast(error.message, 'error'); return; }
+  showToast('Suspensión removida.', 'success');
+  loadUsers();
 }
 
 // ── Panel Reportes ────────────────────────────────────────────
