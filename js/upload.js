@@ -1,6 +1,7 @@
 // js/upload.js
 // ============================================================
 // Cloudinary Unsigned Upload
+// + Compresión de imágenes en el cliente antes de subir — NUEVO
 // ============================================================
 
 import { CLOUDINARY_CONFIG, CLOUDINARY_UPLOAD_URL, CLOUDINARY_DELETE_URL } from './api.js';
@@ -9,8 +10,96 @@ import { showToast } from './utils.js';
 const MAX_FILE_SIZE_MB = 5;
 const ALLOWED_TYPES    = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
+// ── Configuración de compresión ───────────────────────────────
+const COMPRESS_MAX_WIDTH  = 1280;
+const COMPRESS_MAX_HEIGHT = 1280;
+const COMPRESS_QUALITY    = 0.82; // 0-1, solo aplica a jpeg/webp
+const COMPRESS_SKIP_GIF   = true; // GIF no se comprime (perdería animación)
+
+/**
+ * Comprime una imagen en el cliente usando Canvas.
+ * Redimensiona si supera los límites y convierte a JPEG/WebP.
+ * Devuelve el File comprimido o el original si no aplica.
+ *
+ * @param {File} file
+ * @returns {Promise<File>}
+ */
+export async function compressImage(file) {
+  // GIFs se saltan (preservar animación)
+  if (COMPRESS_SKIP_GIF && file.type === 'image/gif') return file;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      let { width, height } = img;
+
+      // Solo comprimir si la imagen es grande o pesa más de 300 KB
+      const needsResize = width > COMPRESS_MAX_WIDTH || height > COMPRESS_MAX_HEIGHT;
+      const needsCompress = file.size > 300 * 1024;
+
+      if (!needsResize && !needsCompress) {
+        resolve(file);
+        return;
+      }
+
+      // Calcular nuevas dimensiones manteniendo proporción
+      if (needsResize) {
+        const ratio = Math.min(COMPRESS_MAX_WIDTH / width, COMPRESS_MAX_HEIGHT / height);
+        width  = Math.round(width  * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width  = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Formato de salida: webp preferido, fallback jpeg
+      const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { resolve(file); return; }
+
+          // Si el resultado es mayor que el original, usar el original
+          if (blob.size >= file.size) { resolve(file); return; }
+
+          const compressed = new File(
+            [blob],
+            file.name.replace(/\.[^.]+$/, outputType === 'image/png' ? '.png' : '.jpg'),
+            { type: outputType, lastModified: Date.now() }
+          );
+
+          console.log(
+            `[compress] ${(file.size / 1024).toFixed(0)} KB → ${(compressed.size / 1024).toFixed(0)} KB`,
+            `(${width}×${height})`
+          );
+
+          resolve(compressed);
+        },
+        outputType,
+        COMPRESS_QUALITY
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file); // fallback: usar original
+    };
+
+    img.src = objectUrl;
+  });
+}
+
 /**
  * Validates and uploads a File to Cloudinary.
+ * Compresses the image before uploading.
  * Returns the secure_url string on success.
  *
  * @param {File} file
@@ -26,9 +115,12 @@ export async function uploadImage(file, onProgress) {
     throw new Error(`File too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`);
   }
 
+  // ── Compress before upload ─────────────────────────────
+  const fileToUpload = await compressImage(file);
+
   // ── Build FormData ─────────────────────────────────────
   const formData = new FormData();
-  formData.append('file',          file);
+  formData.append('file',          fileToUpload);
   formData.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
   formData.append('folder',        CLOUDINARY_CONFIG.folder);
 
@@ -54,7 +146,6 @@ export async function uploadImage(file, onProgress) {
           reject(new Error('Invalid response from Cloudinary.'));
         }
       } else {
-        // Extraer el mensaje exacto que devuelve Cloudinary
         let detail = xhr.responseText;
         try {
           const errJson = JSON.parse(xhr.responseText);
@@ -74,11 +165,7 @@ export async function uploadImage(file, onProgress) {
 
 /**
  * Wires up an <input type="file"> element with a preview container.
- *
- * @param {HTMLInputElement} inputEl     - The file input
- * @param {HTMLElement}      previewEl   - Container for image preview
- * @param {HTMLElement}      progressEl  - Progress bar element
- * @returns {{ getFile: Function, getUploadedUrl: Function, reset: Function }}
+ * Compresses the selected image before showing the preview.
  */
 export function initImageUploader(inputEl, previewEl, progressEl) {
   let selectedFile    = null;
@@ -96,11 +183,10 @@ export function initImageUploader(inputEl, previewEl, progressEl) {
     }
   };
 
-  inputEl.addEventListener('change', (e) => {
+  inputEl.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate early so user sees feedback immediately
     if (!ALLOWED_TYPES.includes(file.type)) {
       showToast('Unsupported file type.', 'error');
       inputEl.value = '';
@@ -112,11 +198,12 @@ export function initImageUploader(inputEl, previewEl, progressEl) {
       return;
     }
 
-    selectedFile = file;
+    // Comprimir antes de mostrar preview
+    const compressed = await compressImage(file);
+    selectedFile = compressed;
     uploadedUrl  = null;
 
-    // Show preview via Object URL (revoke after load to avoid memory leak)
-    const objectUrl = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(compressed);
     while (previewEl.firstChild) previewEl.removeChild(previewEl.firstChild);
 
     const img = document.createElement('img');
@@ -125,7 +212,6 @@ export function initImageUploader(inputEl, previewEl, progressEl) {
     img.className = 'uploader__preview-img';
     img.addEventListener('load', () => URL.revokeObjectURL(objectUrl), { once: true });
 
-    // Remove button — XSS safe: no innerHTML
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'uploader__remove';
@@ -133,18 +219,23 @@ export function initImageUploader(inputEl, previewEl, progressEl) {
     removeBtn.setAttribute('aria-label', 'Remove image');
     removeBtn.addEventListener('click', reset);
 
+    // Mostrar tamaño comprimido si es menor
+    if (compressed.size < file.size) {
+      const sizeBadge = document.createElement('span');
+      sizeBadge.className = 'uploader__size-badge';
+      sizeBadge.textContent = `${(compressed.size / 1024).toFixed(0)} KB`;
+      sizeBadge.title = `Comprimida desde ${(file.size / 1024).toFixed(0)} KB`;
+      previewEl.appendChild(sizeBadge);
+    }
+
     previewEl.appendChild(img);
     previewEl.appendChild(removeBtn);
     previewEl.hidden = false;
   });
 
-  /**
-   * Triggers the actual upload if a file is selected.
-   * Returns the secure_url or null if no file.
-   */
   const triggerUpload = async () => {
     if (!selectedFile) return null;
-    if (uploadedUrl)   return uploadedUrl; // already uploaded
+    if (uploadedUrl)   return uploadedUrl;
 
     if (progressEl) {
       progressEl.hidden = false;
@@ -152,7 +243,15 @@ export function initImageUploader(inputEl, previewEl, progressEl) {
     }
 
     try {
-      uploadedUrl = await uploadImage(selectedFile, (pct) => {
+      // El archivo ya está comprimido (se comprimió al seleccionar)
+      // Usamos uploadImage pero pasando el file ya comprimido directamente
+      // para evitar comprimir dos veces
+      const formData = new FormData();
+      formData.append('file',          selectedFile);
+      formData.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
+      formData.append('folder',        CLOUDINARY_CONFIG.folder);
+
+      uploadedUrl = await _uploadFormData(formData, (pct) => {
         if (progressEl) progressEl.style.width = `${pct}%`;
       });
       return uploadedUrl;
@@ -175,18 +274,40 @@ export function initImageUploader(inputEl, previewEl, progressEl) {
   };
 }
 
+/** Helper interno: sube FormData ya construido */
+function _uploadFormData(formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', CLOUDINARY_UPLOAD_URL, true);
+
+    if (onProgress) {
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      });
+    }
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText).secure_url); }
+        catch { reject(new Error('Invalid response from Cloudinary.')); }
+      } else {
+        let detail = xhr.responseText;
+        try { detail = JSON.parse(xhr.responseText)?.error?.message ?? detail; } catch {}
+        reject(new Error('Cloudinary ' + xhr.status + ': ' + detail));
+      }
+    });
+    xhr.addEventListener('error', () => reject(new Error('Network error during upload.')));
+    xhr.addEventListener('abort', () => reject(new Error('Upload cancelled.')));
+    xhr.send(formData);
+  });
+}
+
 /**
  * Extrae el public_id de Cloudinary a partir de una secure_url.
- * Ej: "https://res.cloudinary.com/dxxx/image/upload/v123/re-confessions/abc.jpg"
- *  → "re-confessions/abc"   (sin extensión)
- *
- * @param {string} url
- * @returns {string|null}
  */
 export function extractPublicId(url) {
   if (!url) return null;
   try {
-    // La URL tiene la forma: .../image/upload/<version?>/<folder/name>.<ext>
     const match = url.match(/\/image\/upload\/(?:v\d+\/)?(.+)\.[a-z0-9]+$/i);
     return match ? match[1] : null;
   } catch {
@@ -196,17 +317,6 @@ export function extractPublicId(url) {
 
 /**
  * Solicita la eliminación de una imagen en Cloudinary.
- *
- * IMPORTANTE: La API /destroy requiere autenticación firmada (api_key + signature)
- * para uploads privados. Para uploads con preset "unsigned" Cloudinary no expone
- * un endpoint público de borrado sin firma, por lo que la solución correcta es
- * usar una Supabase Edge Function o un proxy propio que firme la petición con
- * api_secret. Este helper intenta un borrado "unsigned" (sólo funciona si el
- * preset lo permite o si usas un proxy) y falla silenciosamente para no bloquear
- * el flujo principal de la app.
- *
- * @param {string} publicId  - El public_id obtenido con extractPublicId()
- * @returns {Promise<boolean>} - true si se borró, false si falló
  */
 export async function deleteCloudinaryImage(publicId) {
   if (!publicId) return false;
@@ -215,10 +325,7 @@ export async function deleteCloudinaryImage(publicId) {
     body.append('public_id',    publicId);
     body.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
 
-    const res = await fetch(CLOUDINARY_DELETE_URL, {
-      method: 'POST',
-      body,
-    });
+    const res = await fetch(CLOUDINARY_DELETE_URL, { method: 'POST', body });
 
     if (!res.ok) {
       console.warn('[Cloudinary] delete failed — status', res.status,
@@ -228,8 +335,6 @@ export async function deleteCloudinaryImage(publicId) {
 
     const json = await res.json();
     if (json.result === 'ok') return true;
-
-    // "not found" no es un error crítico (imagen ya borrada o nunca existió)
     if (json.result === 'not found') return true;
 
     console.warn('[Cloudinary] delete result:', json.result);
