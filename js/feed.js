@@ -5,6 +5,10 @@
 // + Compartir confesión (Web Share API / clipboard)
 // + Encuestas rápidas (sí/no) y avanzadas (hasta 4 opciones)
 // + Hashtags múltiples (hasta 3) — picker custom con colores
+// + Infinite scroll (IntersectionObserver) — NUEVO
+// + Pull to refresh — NUEVO
+// + Skeleton loading — NUEVO
+// + Compartir como imagen (html2canvas) — NUEVO
 // ============================================================
 
 import { sb }                                  from './api.js';
@@ -31,6 +35,20 @@ let activeHashtagFilter = null;
 // Estado del picker de hashtags
 let _pickerSelected = []; // array de tags seleccionados (máx 3)
 let _pickerOpen     = false;
+
+// ── Infinite scroll state ────────────────────────────────────
+let _infiniteObserver  = null;
+let _infiniteSentinel  = null;
+let _infiniteLoading   = false;
+let _infiniteExhausted = false;
+let _infiniteCursor    = null; // created_at del último item cargado
+const INFINITE_PAGE_SIZE = 20;
+
+// ── Pull to refresh state ─────────────────────────────────────
+let _ptrStartY     = 0;
+let _ptrDelta      = 0;
+let _ptrActive     = false;
+const PTR_THRESHOLD = 70; // px para disparar el refresh
 
 let feedEl, feedView, chatView,
     composeInput, composeHashtag, composeImgInput,
@@ -148,6 +166,38 @@ const SvgX = (size = 10) => {
   return s;
 };
 
+// ── Skeleton card builder ────────────────────────────────────
+function buildSkeletonCard() {
+  const card = document.createElement('div');
+  card.className = 'rc-card rc-card--skeleton';
+  card.innerHTML = `
+    <div class="rc-card__top">
+      <div class="skeleton-avatar"></div>
+      <div class="skeleton-tag"></div>
+      <div class="skeleton-time"></div>
+    </div>
+    <div class="rc-card__body-row">
+      <div class="skeleton-text-block">
+        <div class="skeleton-line skeleton-line--full"></div>
+        <div class="skeleton-line skeleton-line--long"></div>
+        <div class="skeleton-line skeleton-line--short"></div>
+      </div>
+    </div>
+    <div class="rc-card__footer">
+      <div class="skeleton-action"></div>
+      <div class="skeleton-action"></div>
+      <div class="skeleton-action"></div>
+    </div>`;
+  return card;
+}
+
+function showSkeletons(target, count = 5) {
+  while (target.firstChild) target.removeChild(target.firstChild);
+  for (let i = 0; i < count; i++) {
+    target.appendChild(buildSkeletonCard());
+  }
+}
+
 // ── Init ────────────────────────────────────────────────────
 export async function initFeed() {
   feedEl             = document.getElementById('feed');
@@ -195,6 +245,7 @@ export async function initFeed() {
   initComposeForm();
   startRealtime();
   handleHashNavigation();
+  initPullToRefresh();
 }
 
 // ── Hash navigation (#confession-UUID) ──────────────────────
@@ -413,14 +464,31 @@ export function switchView(view, pushHistory = true) {
   }
 }
 
-// ── Load confessions ─────────────────────────────────────────
+// ── Load confessions (primera carga + infinite scroll) ──────
 export async function loadConfessions(containerEl, userId = null) {
   const target = containerEl || feedEl;
+
+  // Resetear estado infinite scroll solo para el feed principal
+  if (!containerEl && !userId) {
+    _infiniteExhausted = false;
+    _infiniteLoading   = false;
+    _infiniteCursor    = null;
+    _destroyInfiniteObserver();
+  }
+
+  // Mostrar skeletons mientras carga (solo en feed principal)
+  if (!containerEl && !userId) {
+    showSkeletons(target, 5);
+  } else {
+    while (target.firstChild) target.removeChild(target.firstChild);
+    target.appendChild(el('p', { className: 'feed-empty', textContent: 'Cargando…' }));
+  }
+
   let query = sb
     .from('confessions')
     .select('id, user_id, content, image_url, hashtag, hashtags, created_at, poll_question')
     .order('created_at', { ascending: false })
-    .limit(50);
+    .limit(INFINITE_PAGE_SIZE);
 
   if (userId) query = query.eq('user_id', userId);
   if (!userId && activeHashtagFilter) {
@@ -437,6 +505,63 @@ export async function loadConfessions(containerEl, userId = null) {
     return;
   }
 
+  const { cards, lastItem } = await _renderConfessionBatch(data, target, false);
+
+  if (!userId) {
+    lastConfessionId = data[0]?.id;
+    _infiniteCursor  = lastItem?.created_at ?? null;
+
+    // Si devolvió página completa, hay más → activar infinite scroll
+    if (data.length >= INFINITE_PAGE_SIZE) {
+      _setupInfiniteScroll(target, userId);
+    } else {
+      _infiniteExhausted = true;
+    }
+  }
+}
+
+// ── Cargar siguiente página (infinite scroll) ────────────────
+async function _loadMoreConfessions(target, userId = null) {
+  if (_infiniteLoading || _infiniteExhausted || !_infiniteCursor) return;
+  _infiniteLoading = true;
+
+  // Spinner al fondo
+  const spinner = el('div', { className: 'infinite-spinner', attrs: { 'aria-label': 'Cargando más…' } });
+  target.appendChild(spinner);
+
+  let query = sb
+    .from('confessions')
+    .select('id, user_id, content, image_url, hashtag, hashtags, created_at, poll_question')
+    .order('created_at', { ascending: false })
+    .lt('created_at', _infiniteCursor)
+    .limit(INFINITE_PAGE_SIZE);
+
+  if (userId) query = query.eq('user_id', userId);
+  if (!userId && activeHashtagFilter) {
+    query = query.or(`hashtags.cs.{"${activeHashtagFilter}"},hashtag.eq.${activeHashtagFilter}`);
+  }
+
+  const { data, error } = await query;
+  spinner.remove();
+  _infiniteLoading = false;
+
+  if (error || !data?.length) {
+    _infiniteExhausted = true;
+    _destroyInfiniteObserver();
+    return;
+  }
+
+  const { lastItem } = await _renderConfessionBatch(data, target, false);
+  _infiniteCursor = lastItem?.created_at ?? null;
+
+  if (data.length < INFINITE_PAGE_SIZE) {
+    _infiniteExhausted = true;
+    _destroyInfiniteObserver();
+  }
+}
+
+// ── Renderiza un batch de confesiones ────────────────────────
+async function _renderConfessionBatch(data, target, prepend) {
   let userLikedSet = new Set();
   if (currentUser) {
     const { data: liked } = await sb.from('likes').select('confession_id').eq('user_id', currentUser.id);
@@ -477,7 +602,7 @@ export async function loadConfessions(containerEl, userId = null) {
   }
 
   data.forEach(c => buildCard(
-    c, target, false, false,
+    c, target, prepend, prepend,
     likeMap[c.id]    || 0,
     commentMap[c.id] || 0,
     userLikedSet.has(c.id),
@@ -486,7 +611,90 @@ export async function loadConfessions(containerEl, userId = null) {
     userVoteMap[pollMap[c.id]?.id] || null,
   ));
 
-  if (!userId) lastConfessionId = data[0]?.id;
+  return { cards: data, lastItem: data[data.length - 1] ?? null };
+}
+
+// ── Infinite scroll setup ────────────────────────────────────
+function _setupInfiniteScroll(target, userId = null) {
+  _destroyInfiniteObserver();
+
+  _infiniteSentinel = el('div', { className: 'infinite-sentinel', attrs: { 'aria-hidden': 'true' } });
+  target.appendChild(_infiniteSentinel);
+
+  _infiniteObserver = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) {
+      _loadMoreConfessions(target, userId);
+    }
+  }, { rootMargin: '200px' });
+
+  _infiniteObserver.observe(_infiniteSentinel);
+}
+
+function _destroyInfiniteObserver() {
+  if (_infiniteObserver) {
+    _infiniteObserver.disconnect();
+    _infiniteObserver = null;
+  }
+  _infiniteSentinel?.remove();
+  _infiniteSentinel = null;
+}
+
+// ── Pull to refresh ───────────────────────────────────────────
+function initPullToRefresh() {
+  const scrollEl = feedEl;
+  if (!scrollEl) return;
+
+  // Indicador visual
+  const indicator = el('div', { className: 'ptr-indicator', attrs: { 'aria-hidden': 'true' } });
+  indicator.innerHTML = `<div class="ptr-spinner"></div><span class="ptr-label">Suelta para recargar</span>`;
+  feedView?.insertBefore(indicator, scrollEl);
+
+  const onTouchStart = (e) => {
+    if (scrollEl.scrollTop > 0) return;
+    _ptrStartY = e.touches[0].clientY;
+    _ptrActive = true;
+    _ptrDelta  = 0;
+  };
+
+  const onTouchMove = (e) => {
+    if (!_ptrActive) return;
+    const currentY = e.touches[0].clientY;
+    _ptrDelta = Math.max(0, currentY - _ptrStartY);
+
+    if (_ptrDelta > 10 && scrollEl.scrollTop <= 0) {
+      e.preventDefault();
+      const progress = Math.min(_ptrDelta / PTR_THRESHOLD, 1);
+      const translateY = Math.min(_ptrDelta * 0.45, PTR_THRESHOLD * 0.45);
+      indicator.style.transform = `translateY(${translateY}px)`;
+      indicator.classList.toggle('ptr-indicator--ready', _ptrDelta >= PTR_THRESHOLD);
+      indicator.style.opacity = String(progress);
+    }
+  };
+
+  const onTouchEnd = async () => {
+    if (!_ptrActive) return;
+    _ptrActive = false;
+
+    if (_ptrDelta >= PTR_THRESHOLD) {
+      indicator.classList.add('ptr-indicator--loading');
+      indicator.style.transform = 'translateY(48px)';
+      await loadConfessions();
+      startRealtime();
+    }
+
+    // Reset animado
+    indicator.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+    indicator.style.transform  = '';
+    indicator.style.opacity    = '0';
+    indicator.classList.remove('ptr-indicator--ready', 'ptr-indicator--loading');
+    setTimeout(() => { indicator.style.transition = ''; }, 300);
+
+    _ptrDelta = 0;
+  };
+
+  scrollEl.addEventListener('touchstart', onTouchStart, { passive: true });
+  scrollEl.addEventListener('touchmove',  onTouchMove,  { passive: false });
+  scrollEl.addEventListener('touchend',   onTouchEnd,   { passive: true });
 }
 
 function buildCountMap(rows, key) {
@@ -606,6 +814,15 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
   shareBtn.addEventListener('click', (e) => { e.stopPropagation(); shareConfession(confession.id); });
   footer.appendChild(shareBtn);
 
+  // ── Botón Compartir como imagen ─────────────────────────
+  const imgShareBtn = el('button', {
+    className: 'rc-card__action rc-card__action--imgshare',
+    attrs: { type: 'button', 'aria-label': 'Compartir como imagen' },
+  });
+  imgShareBtn.appendChild(_buildImgShareIcon(17));
+  imgShareBtn.addEventListener('click', (e) => { e.stopPropagation(); shareAsImage(card, confession); });
+  footer.appendChild(imgShareBtn);
+
   card.appendChild(footer);
   card.addEventListener('click', () => handleOpenChat(confession));
 
@@ -615,6 +832,90 @@ export function buildCard(confession, container, prependToTop, animate, likeCoun
 
   if (animate) {
     card.addEventListener('animationend', () => card.classList.remove('rc-card--new'), { once: true });
+  }
+}
+
+function _buildImgShareIcon(size = 17) {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none');
+  s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.6');
+  s.setAttribute('width', size); s.setAttribute('height', size);
+  s.setAttribute('aria-hidden', 'true');
+  s.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round"
+    d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5
+       l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M6 21h12a2.25 2.25 0
+       002.25-2.25V6.75A2.25 2.25 0 0018 4.5H6A2.25 2.25 0 003.75 6.75v12A2.25
+       2.25 0 006 21zm10.125-11.25h.008v.008h-.008V9.75zm.375 0a.375.375 0
+       11-.75 0 .375.375 0 01.75 0z"/>`;
+  return s;
+}
+
+// ── Compartir como imagen (html2canvas) ──────────────────────
+async function shareAsImage(cardEl, confession) {
+  // Cargar html2canvas desde CDN si no está disponible
+  if (!window.html2canvas) {
+    showToast('Cargando exportador…', 'info');
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      script.onload  = resolve;
+      script.onerror = () => reject(new Error('No se pudo cargar html2canvas'));
+      document.head.appendChild(script);
+    }).catch(err => { showToast(err.message, 'error'); return; });
+  }
+  if (!window.html2canvas) return;
+
+  // Crear una copia de la card sin los botones de acción para la imagen
+  const clone = cardEl.cloneNode(true);
+  clone.querySelectorAll('.rc-card__footer, .rc-card__del').forEach(el => el.remove());
+  clone.style.cssText = `
+    position:fixed;
+    left:-9999px;top:0;
+    width:${cardEl.offsetWidth}px;
+    font-family:'Inter',system-ui,sans-serif;
+    background:var(--bg-card,#1c1a25);
+    border-radius:16px;
+    padding:16px;
+    border:1px solid rgba(255,255,255,0.07);
+  `;
+  document.body.appendChild(clone);
+
+  try {
+    const canvas = await window.html2canvas(clone, {
+      backgroundColor: null,
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    });
+    clone.remove();
+
+    canvas.toBlob(async (blob) => {
+      if (!blob) { showToast('Error generando imagen.', 'error'); return; }
+
+      const file = new File([blob], 'confesion.png', { type: 'image/png' });
+
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: 'Re-Confessions' });
+          return;
+        } catch (err) {
+          if (err.name === 'AbortError') return;
+        }
+      }
+
+      // Fallback: descargar la imagen
+      const url = URL.createObjectURL(blob);
+      const a   = document.createElement('a');
+      a.href     = url;
+      a.download = `confesion-${confession.id.slice(0, 8)}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Imagen descargada.', 'success');
+    }, 'image/png');
+  } catch (err) {
+    clone.remove();
+    showToast('Error al generar la imagen.', 'error');
+    console.error('[shareAsImage]', err);
   }
 }
 
@@ -644,7 +945,6 @@ function buildSimplePollWidget(poll, userVoteInfo, card) {
       attrs: { type: 'button', 'data-vote': value },
     });
     const labelWrap = el('span', { className: 'poll-btn__label' });
-    // SVG en lugar de emoji
     labelWrap.appendChild(value === 'yes' ? SvgThumbUp(14) : SvgThumbDown(14));
     labelWrap.appendChild(document.createTextNode(value === 'yes' ? ' Sí' : ' No'));
     const bar   = el('div', { className: 'poll-btn__bar' });
@@ -739,7 +1039,7 @@ async function castAdvancedVote(poll, optionId, widgetEl, card) {
   } catch { showToast('Error al votar.', 'error'); }
 }
 
-// ── Share ─────────────────────────────────────────────────────
+// ── Share (URL) ───────────────────────────────────────────────
 async function shareConfession(confessionId) {
   const url = `${location.origin}${location.pathname}#confession-${confessionId}`;
   if (navigator.share) {
@@ -772,6 +1072,9 @@ function openImageModal(url) {
 }
 
 async function handleOpenChat(confession) {
+  if (typeof window.__rcOpenChat === 'function') {
+    return window.__rcOpenChat(confession);
+  }
   switchView('chat');
   await openChat(confession);
 }
@@ -809,12 +1112,10 @@ async function deleteConfession(id, cardEl) {
   let error, imageUrl;
 
   if (currentProfile?.is_admin) {
-    // Admin usa RPC SECURITY DEFINER; devuelve image_url para limpiar Cloudinary
     const { data, error: rpcError } = await sb.rpc('admin_delete_confession', { p_confession_id: id });
     error    = rpcError;
     imageUrl = data ?? null;
   } else {
-    // Dueño: leer image_url antes de borrar para limpiar Cloudinary después
     const { data: row } = await sb.from('confessions').select('image_url').eq('id', id).single();
     imageUrl = row?.image_url ?? null;
     ({ error } = await sb.from('confessions').delete().eq('id', id));
@@ -822,7 +1123,6 @@ async function deleteConfession(id, cardEl) {
 
   if (error) { showToast(error.message, 'error'); return; }
 
-  // Eliminar imagen huérfana de Cloudinary (fire-and-forget, fallo silencioso)
   if (imageUrl) {
     const pid = extractPublicId(imageUrl);
     if (pid) deleteCloudinaryImage(pid);
@@ -833,22 +1133,12 @@ async function deleteConfession(id, cardEl) {
 }
 
 // ── Permisos de borrado ───────────────────────────────────────
-
-/**
- * Puede borrar una confesión o comentario propio.
- * También cubre al admin (control total).
- * Los invitados (rc_guest) nunca tienen permiso.
- */
 export function canDelete(rowUserId) {
   if (sessionStorage.getItem('rc_guest') === '1') return false;
   if (!currentUser) return false;
   return currentUser.id === rowUserId || !!currentProfile?.is_admin;
 }
 
-/**
- * Dueño del hilo — puede borrar cualquier comentario dentro de su confesión.
- * No aplica a invitados ni a usuarios no autenticados.
- */
 export function canDeleteAsThreadOwner(confessionUserId) {
   if (sessionStorage.getItem('rc_guest') === '1') return false;
   if (!currentUser) return false;
@@ -865,11 +1155,9 @@ function initComposeForm() {
     if (!content) return;
     if (_isSuspended()) { showToast('No puedes confesar mientras estás suspendido.', 'error'); return; }
 
-    // Tags del picker custom (máx 3, mínimo 1)
     const selectedTags   = _pickerSelected.length ? _pickerSelected.slice(0, 3) : ['#Confesión'];
     const primaryHashtag = selectedTags[0];
 
-    // Tipo de encuesta
     const isAdvanced = document.getElementById('poll-type-advanced')?.classList.contains('compose-poll-type-btn--active');
 
     let advancedOptions = [];
@@ -945,20 +1233,17 @@ function _isSuspended() {
 
 // ── Realtime ──────────────────────────────────────────────────
 function startRealtime() {
-  // Cancelar canal anterior si existe (p.ej. al recargar filtro)
   if (realtimeChannel) {
     sb.removeChannel(realtimeChannel);
     realtimeChannel = null;
   }
 
-  // Timeout de fallback: si en 8 s no llega SUBSCRIBED → polling
   let subscribeTimeout = setTimeout(() => {
     console.warn('[realtime] timeout esperando SUBSCRIBED — activando polling');
     startPolling();
   }, 8000);
 
   try {
-    // Nombre único por sesión para evitar conflictos con canales "zombi"
     realtimeChannel = sb.channel(`rc-feed-${Date.now()}`)
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'confessions',
@@ -995,7 +1280,7 @@ function startRealtime() {
         console.log('[realtime] status:', status);
         if (status === 'SUBSCRIBED') {
           clearTimeout(subscribeTimeout);
-          stopPolling(); // Realtime OK → detener polling si estaba activo
+          stopPolling();
         }
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           clearTimeout(subscribeTimeout);
