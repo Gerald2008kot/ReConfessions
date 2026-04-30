@@ -10,7 +10,8 @@ import { el, formatDate, showToast, getInitials } from './utils.js';
 import { Icons }                                 from './icons.js';
 import { tagColor }                              from './shared.js';
 import { routerPush, routerBack }                from './router.js';
-import { buildCard as feedBuildCard }            from './feed.js';
+import { buildCard as feedBuildCard, switchView } from './feed.js';
+import { openChat }                              from './chat.js';
 
 let _currentUser    = null;
 let _currentProfile = null;
@@ -34,29 +35,31 @@ export async function openAutor(userId, fromView = 'feed', onClose = null) {
   _fromView     = fromView;
   _onClose      = onClose;
 
-  // Asegurar que el módulo esté inicializado
   if (!_currentUser && !_currentProfile) await initAutor();
 
-  // Construir o reusar el overlay
   let overlay = document.getElementById('autor-overlay');
   if (!overlay) {
     overlay = _buildOverlay();
     document.body.appendChild(overlay);
   }
 
-  // Mostrar con animación
+  // Registrar callback AQUÍ — persiste mientras el overlay está abierto
+  window.__rcOpenChat = async (confession) => {
+    const ov = document.getElementById('autor-overlay');
+    if (ov) ov.remove();
+    window.__rcOpenChat = null;
+    switchView('chat');
+    await openChat(confession);
+  };
+
   overlay.hidden = false;
   requestAnimationFrame(() => overlay.classList.add('autor-overlay--open'));
-
-  // Empujar historial
   routerPush('autor', _closeAutorUI);
-
-  // Cargar datos
   await _loadAutorData(userId, overlay);
 }
 
-// ── Cerrar (sin tocar historial) ──────────────────────────────
 function _closeAutorUI() {
+  window.__rcOpenChat = null;
   const overlay = document.getElementById('autor-overlay');
   if (!overlay) return;
   overlay.classList.remove('autor-overlay--open');
@@ -285,11 +288,11 @@ function _renderDropdown(userId, profile) {
   const isAdmin = !!_currentProfile?.is_admin;
   const isSelf  = _currentUser?.id === userId;
 
-  // Siempre: Reportar perfil (si no es uno mismo)
+  // Para todos: Reportar (si no es uno mismo)
   if (!isSelf) {
     const reportBtn = _mkDropdownItem('Reportar perfil', 'var(--danger, #ef4444)', () => {
       dd.hidden = true;
-      _reportProfile(userId);
+      _openReportModal(userId);
     });
     dd.appendChild(reportBtn);
   }
@@ -300,14 +303,11 @@ function _renderDropdown(userId, profile) {
     const isSuspended = profile.suspended_until && new Date(profile.suspended_until) > new Date();
 
     if (!isSuspended) {
-      // Suspender opciones
-      [1, 3, 7, 30].forEach(days => {
-        const btn = _mkDropdownItem(`Suspender ${days} día${days > 1 ? 's' : ''}`, 'var(--warning, #f59e0b)', () => {
-          dd.hidden = true;
-          _suspendUser(userId, days);
-        });
-        dd.appendChild(btn);
+      const suspBtn = _mkDropdownItem('Suspender usuario', 'var(--warning, #f59e0b)', () => {
+        dd.hidden = true;
+        _openSuspendModal(userId);
       });
+      dd.appendChild(suspBtn);
     } else {
       const unsuspBtn = _mkDropdownItem('Desuspender', 'var(--success, #22c55e)', () => {
         dd.hidden = true;
@@ -320,6 +320,136 @@ function _renderDropdown(userId, profile) {
   if (dd.children.length === 0) {
     dd.appendChild(el('p', { className: 'autor-dropdown__empty', textContent: 'Sin opciones' }));
   }
+}
+
+// ── Modal Reportar ────────────────────────────────────────────
+function _openReportModal(userId) {
+  if (!_currentUser) { showToast('Inicia sesión para reportar.', 'info'); return; }
+
+  const REPORT_REASONS = [
+    'Contenido inapropiado',
+    'Acoso o bullying',
+    'Spam o publicidad',
+    'Información falsa',
+    'Discurso de odio',
+    'Otro',
+  ];
+
+  let selectedReason = null;
+
+  const overlay = el('div', { className: 'rc-modal-overlay', attrs: { id: 'report-modal' } });
+  const modal   = el('div', { className: 'rc-modal' });
+
+  modal.appendChild(el('h3', { className: 'rc-modal__title', textContent: 'Reportar perfil' }));
+  modal.appendChild(el('p', { className: 'rc-modal__subtitle', textContent: 'Selecciona el motivo del reporte:' }));
+
+  const optionsWrap = el('div', { className: 'rc-modal__options' });
+  REPORT_REASONS.forEach(reason => {
+    const btn = el('button', {
+      className: 'rc-modal__option',
+      textContent: reason,
+      attrs: { type: 'button' },
+    });
+    btn.addEventListener('click', () => {
+      optionsWrap.querySelectorAll('.rc-modal__option').forEach(b => b.classList.remove('rc-modal__option--selected'));
+      btn.classList.add('rc-modal__option--selected');
+      selectedReason = reason;
+      extraInput.hidden = reason !== 'Otro';
+    });
+    optionsWrap.appendChild(btn);
+  });
+  modal.appendChild(optionsWrap);
+
+  const extraInput = el('textarea', {
+    className: 'rc-modal__textarea',
+    attrs: { placeholder: 'Describe el motivo…', maxlength: '300', rows: '3', hidden: '' },
+  });
+  modal.appendChild(extraInput);
+
+  const footer = el('div', { className: 'rc-modal__footer' });
+  const cancelBtn = el('button', { className: 'rc-modal__btn rc-modal__btn--cancel', textContent: 'Cancelar', attrs: { type: 'button' } });
+  const sendBtn   = el('button', { className: 'rc-modal__btn rc-modal__btn--primary', textContent: 'Enviar reporte', attrs: { type: 'button' } });
+
+  const close = () => overlay.remove();
+
+  cancelBtn.addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  sendBtn.addEventListener('click', async () => {
+    const reason = selectedReason === 'Otro'
+      ? (extraInput.value.trim() || 'Otro')
+      : selectedReason;
+    if (!reason) { showToast('Selecciona un motivo.', 'info'); return; }
+    try {
+      await sb.from('reports').insert({
+        reporter_id:   _currentUser.id,
+        reported_type: 'profile',
+        reported_id:   userId,
+        reason,
+      });
+      showToast('Reporte enviado. El equipo lo revisará.', 'success');
+      close();
+    } catch {
+      showToast('Error al enviar reporte.', 'error');
+    }
+  });
+
+  footer.appendChild(cancelBtn);
+  footer.appendChild(sendBtn);
+  modal.appendChild(footer);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('rc-modal-overlay--open'));
+}
+
+// ── Modal Suspender ───────────────────────────────────────────
+function _openSuspendModal(userId) {
+  const DAYS_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 15, 21, 30];
+  let selectedDays = null;
+
+  const overlay = el('div', { className: 'rc-modal-overlay', attrs: { id: 'suspend-modal' } });
+  const modal   = el('div', { className: 'rc-modal' });
+
+  modal.appendChild(el('h3', { className: 'rc-modal__title', textContent: 'Suspender usuario' }));
+  modal.appendChild(el('p', { className: 'rc-modal__subtitle', textContent: 'Selecciona la duración de la suspensión:' }));
+
+  const grid = el('div', { className: 'rc-modal__days-grid' });
+  DAYS_OPTIONS.forEach(days => {
+    const btn = el('button', {
+      className: 'rc-modal__day-btn',
+      textContent: `${days} día${days > 1 ? 's' : ''}`,
+      attrs: { type: 'button' },
+    });
+    btn.addEventListener('click', () => {
+      grid.querySelectorAll('.rc-modal__day-btn').forEach(b => b.classList.remove('rc-modal__day-btn--selected'));
+      btn.classList.add('rc-modal__day-btn--selected');
+      selectedDays = days;
+    });
+    grid.appendChild(btn);
+  });
+  modal.appendChild(grid);
+
+  const footer = el('div', { className: 'rc-modal__footer' });
+  const cancelBtn = el('button', { className: 'rc-modal__btn rc-modal__btn--cancel', textContent: 'Cancelar', attrs: { type: 'button' } });
+  const confirmBtn = el('button', { className: 'rc-modal__btn rc-modal__btn--danger', textContent: 'Suspender', attrs: { type: 'button' } });
+
+  const close = () => overlay.remove();
+
+  cancelBtn.addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  confirmBtn.addEventListener('click', async () => {
+    if (!selectedDays) { showToast('Selecciona una duración.', 'info'); return; }
+    await _suspendUser(userId, selectedDays);
+    close();
+  });
+
+  footer.appendChild(cancelBtn);
+  footer.appendChild(confirmBtn);
+  modal.appendChild(footer);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('rc-modal-overlay--open'));
 }
 
 function _mkDropdownItem(text, color, onClick) {
@@ -372,6 +502,17 @@ async function _loadAutorFeed(userId, container) {
 
   const profile = _targetProfile;
 
+  // Registrar callback para que feedBuildCard abra el chat correctamente
+  const prevOpenChat = window.__rcOpenChat;
+  window.__rcOpenChat = async (confession) => {
+    // Remover overlay inmediatamente (sin esperar animación) para que no tape view-chat
+    const overlay = document.getElementById('autor-overlay');
+    if (overlay) overlay.remove();
+    // switchView activa view-chat y desactiva view-feed correctamente
+    switchView('chat');
+    await openChat(confession);
+  };
+
   data.forEach(c => {
     feedBuildCard(
       c, container, false, false,
@@ -382,6 +523,8 @@ async function _loadAutorFeed(userId, container) {
       null, null,
     );
   });
+
+  window.__rcOpenChat = prevOpenChat;
 }
 
 function _countMap(rows, key) {
@@ -417,29 +560,8 @@ async function _toggleFollow(targetId, btn, statsEl) {
   }
 }
 
-// ── Reportar perfil ───────────────────────────────────────────
-async function _reportProfile(userId) {
-  if (!_currentUser) { showToast('Inicia sesión para reportar.', 'info'); return; }
-
-  const reason = prompt('¿Por qué quieres reportar este perfil?\n(Escribe brevemente el motivo)');
-  if (!reason?.trim()) return;
-
-  try {
-    await sb.from('reports').insert({
-      reporter_id:   _currentUser.id,
-      reported_type: 'profile',
-      reported_id:   userId,
-      reason:        reason.trim(),
-    });
-    showToast('Reporte enviado. El equipo lo revisará.', 'success');
-  } catch {
-    showToast('Error al enviar reporte.', 'error');
-  }
-}
-
 // ── Suspender usuario ─────────────────────────────────────────
 async function _suspendUser(userId, days) {
-  if (!confirm(`¿Suspender a este usuario por ${days} día${days > 1 ? 's' : ''}?`)) return;
   const until = new Date(Date.now() + days * 86400000).toISOString();
   const { error } = await sb.from('profiles').update({ suspended_until: until }).eq('id', userId);
   if (error) { showToast(error.message, 'error'); return; }
@@ -451,7 +573,6 @@ async function _suspendUser(userId, days) {
 
 // ── Desuspender usuario ───────────────────────────────────────
 async function _unsuspendUser(userId) {
-  if (!confirm('¿Quitar la suspensión a este usuario?')) return;
   const { error } = await sb.from('profiles').update({ suspended_until: null }).eq('id', userId);
   if (error) { showToast(error.message, 'error'); return; }
   showToast('Suspensión removida.', 'success');
