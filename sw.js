@@ -3,7 +3,7 @@
 // PWA: caché offline del shell de la app
 // ============================================================
 
-const CACHE_NAME    = 'rc-shell-v1';
+const CACHE_NAME    = 'ReConfessions-shell-v1';
 const SHELL_ASSETS  = [
   '/',
   '/index.html',
